@@ -19,7 +19,7 @@ limitations under the License.
 package fake
 
 import (
-	v1 "github.com/slok/bifrost/pkg/kubernetes/gen/clientset/versioned/typed/auth/v1"
+	v1 "github.com/slok/bilrost/pkg/kubernetes/gen/clientset/versioned/typed/auth/v1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )

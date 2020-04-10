@@ -21,7 +21,7 @@ package fake
 import (
 	"context"
 
-	authv1 "github.com/slok/bifrost/pkg/apis/auth/v1"
+	authv1 "github.com/slok/bilrost/pkg/apis/auth/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -35,9 +35,9 @@ type FakeAuthBackends struct {
 	Fake *FakeAuthV1
 }
 
-var authbackendsResource = schema.GroupVersionResource{Group: "auth.bifrost.slok.dev", Version: "v1", Resource: "authbackends"}
+var authbackendsResource = schema.GroupVersionResource{Group: "auth.bilrost.slok.dev", Version: "v1", Resource: "authbackends"}
 
-var authbackendsKind = schema.GroupVersionKind{Group: "auth.bifrost.slok.dev", Version: "v1", Kind: "AuthBackend"}
+var authbackendsKind = schema.GroupVersionKind{Group: "auth.bilrost.slok.dev", Version: "v1", Kind: "AuthBackend"}
 
 // Get takes name of the authBackend, and returns the corresponding authBackend object, and an error if there is any.
 func (c *FakeAuthBackends) Get(ctx context.Context, name string, options v1.GetOptions) (result *authv1.AuthBackend, err error) {

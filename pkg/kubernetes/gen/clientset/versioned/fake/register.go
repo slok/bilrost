@@ -19,7 +19,7 @@ limitations under the License.
 package fake
 
 import (
-	authv1 "github.com/slok/bifrost/pkg/apis/auth/v1"
+	authv1 "github.com/slok/bilrost/pkg/apis/auth/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

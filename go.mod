@@ -1,4 +1,4 @@
-module github.com/slok/bifrost
+module github.com/slok/bilrost
 
 go 1.14
 

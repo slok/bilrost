@@ -6,7 +6,7 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: (devel)
   creationTimestamp: null
-  name: authbackends.auth.bifrost.slok.dev
+  name: authbackends.auth.bilrost.slok.dev
 spec:
   additionalPrinterColumns:
   - JSONPath: .metadata.name
@@ -15,11 +15,11 @@ spec:
   - JSONPath: .metadata.creationTimestamp
     name: AGE
     type: date
-  group: auth.bifrost.slok.dev
+  group: auth.bilrost.slok.dev
   names:
     categories:
     - auth
-    - bifrost
+    - bilrost
     kind: AuthBackend
     listKind: AuthBackendList
     plural: authbackends
@@ -53,6 +53,7 @@ spec:
               type: object
           type: object
         status:
+          description: AuthBackendStatus is the auth backend  status
           type: object
       type: object
   version: v1

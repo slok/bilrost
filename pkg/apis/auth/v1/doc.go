@@ -1,5 +1,5 @@
 // +k8s:deepcopy-gen=package
-// +groupName=auth.bifrost.slok.dev
+// +groupName=auth.bilrost.slok.dev
 // +versionName=v1
 
 package v1

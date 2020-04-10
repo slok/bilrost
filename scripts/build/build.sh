@@ -3,8 +3,8 @@
 set -o errexit
 set -o nounset
 
-src=./cmd/bifrost
-out=./bin/bifrost
+src=./cmd/bilrost
+out=./bin/bilrost
 
 goarch=amd64
 goos=linux

@@ -10,8 +10,8 @@ UNIT_TEST_CMD := ./scripts/check/unit-test.sh
 INTEGRATION_TEST_CMD := ./scripts/check/integration-test.sh
 CHECK_CMD := ./scripts/check/check.sh
 
-DEV_IMAGE_NAME := slok/bifrost-dev
-PROD_IMAGE_NAME ?=  slok/bifrost
+DEV_IMAGE_NAME := slok/bilrost-dev
+PROD_IMAGE_NAME ?=  slok/bilrost
 
 DOCKER_RUN_CMD := docker run --env ostype=$(OSTYPE) -v ${PWD}:/src --rm -it ${DEV_IMAGE_NAME}
 BUILD_BINARY_CMD := VERSION=${VERSION} ./scripts/build/build.sh

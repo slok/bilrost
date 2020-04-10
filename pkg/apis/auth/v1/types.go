@@ -12,7 +12,7 @@ import (
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="NAME",type="string",JSONPath=".metadata.name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
-// +kubebuilder:resource:singular=authbackend,path=authbackends,shortName=ab,scope=Cluster,categories=auth;bifrost
+// +kubebuilder:resource:singular=authbackend,path=authbackends,shortName=ab,scope=Cluster,categories=auth;bilrost
 type AuthBackend struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

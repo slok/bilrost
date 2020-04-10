@@ -19,8 +19,8 @@ limitations under the License.
 package v1
 
 import (
-	v1 "github.com/slok/bifrost/pkg/apis/auth/v1"
-	"github.com/slok/bifrost/pkg/kubernetes/gen/clientset/versioned/scheme"
+	v1 "github.com/slok/bilrost/pkg/apis/auth/v1"
+	"github.com/slok/bilrost/pkg/kubernetes/gen/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 
@@ -29,7 +29,7 @@ type AuthV1Interface interface {
 	AuthBackendsGetter
 }
 
-// AuthV1Client is used to interact with features provided by the auth.bifrost.slok.dev group.
+// AuthV1Client is used to interact with features provided by the auth.bilrost.slok.dev group.
 type AuthV1Client struct {
 	restClient rest.Interface
 }
