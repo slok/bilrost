@@ -54,9 +54,16 @@ check: build-dev-image  ## Runs checks.
 integration: build-dev-image ## Runs integration test.
 	@$(DOCKER_RUN_CMD) /bin/sh -c '$(INTEGRATION_TEST_CMD)'
 
-.PHONY: mocks
-mocks: build-dev-image  ## Generates the mocks.
-	@$(DOCKER_RUN_CMD) /bin/sh -c './scripts/mockgen.sh'
+.PHONY: go-gen
+go-gen: build-dev-image  ## Generates go based code.
+	@$(DOCKER_RUN_CMD) /bin/sh -c './scripts/gogen.sh'
+
+.PHONY: kube-gen
+kube-gen: ## Generates Kubernetes based code.
+	/bin/sh -c './scripts/kubegen.sh'
+
+.PHONY: gen
+gen: go-gen kube-gen ## Generates all.
 
 .PHONY: deps
 deps:  ## Fixes the dependencies
