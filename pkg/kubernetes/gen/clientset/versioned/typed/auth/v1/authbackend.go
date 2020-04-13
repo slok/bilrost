@@ -22,8 +22,8 @@ import (
 	"context"
 	"time"
 
-	v1 "github.com/slok/bifrost/pkg/apis/auth/v1"
-	scheme "github.com/slok/bifrost/pkg/kubernetes/gen/clientset/versioned/scheme"
+	v1 "github.com/slok/bilrost/pkg/apis/auth/v1"
+	scheme "github.com/slok/bilrost/pkg/kubernetes/gen/clientset/versioned/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"

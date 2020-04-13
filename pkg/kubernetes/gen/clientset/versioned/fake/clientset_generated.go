@@ -19,9 +19,9 @@ limitations under the License.
 package fake
 
 import (
-	clientset "github.com/slok/bifrost/pkg/kubernetes/gen/clientset/versioned"
-	authv1 "github.com/slok/bifrost/pkg/kubernetes/gen/clientset/versioned/typed/auth/v1"
-	fakeauthv1 "github.com/slok/bifrost/pkg/kubernetes/gen/clientset/versioned/typed/auth/v1/fake"
+	clientset "github.com/slok/bilrost/pkg/kubernetes/gen/clientset/versioned"
+	authv1 "github.com/slok/bilrost/pkg/kubernetes/gen/clientset/versioned/typed/auth/v1"
+	fakeauthv1 "github.com/slok/bilrost/pkg/kubernetes/gen/clientset/versioned/typed/auth/v1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"

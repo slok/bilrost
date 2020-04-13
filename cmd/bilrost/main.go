@@ -6,7 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/slok/bifrost/internal/log"
+	"github.com/slok/bilrost/internal/log"
 )
 
 // Run runs the main application.

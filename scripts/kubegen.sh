@@ -5,7 +5,7 @@ set -o nounset
 
 IMAGE=quay.io/slok/kube-code-generator:v1.18.0
 ROOT_DIRECTORY=$(dirname "$(readlink -f "$0")")/../
-PROJECT_PACKAGE="github.com/slok/bifrost"
+PROJECT_PACKAGE="github.com/slok/bilrost"
 
 echo "Generating Kubernetes CRD clients..."
 docker run -it --rm \

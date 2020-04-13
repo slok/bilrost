@@ -21,7 +21,7 @@ package versioned
 import (
 	"fmt"
 
-	authv1 "github.com/slok/bifrost/pkg/kubernetes/gen/clientset/versioned/typed/auth/v1"
+	authv1 "github.com/slok/bilrost/pkg/kubernetes/gen/clientset/versioned/typed/auth/v1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"

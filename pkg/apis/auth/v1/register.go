@@ -5,7 +5,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/slok/bifrost/pkg/apis/auth"
+	"github.com/slok/bilrost/pkg/apis/auth"
 )
 
 const (
