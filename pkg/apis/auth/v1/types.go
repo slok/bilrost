@@ -28,6 +28,8 @@ type AuthBackendSpec struct {
 
 // AuthBackendDex is the spec for a Dex based auth backend.
 type AuthBackendDex struct {
+	PublicURL  string `json:"publicURL"`
+	APIAddress string `json:"apiAddress"`
 }
 
 // AuthBackendStatus is the auth backend  status

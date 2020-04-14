@@ -3,7 +3,8 @@
 set -o errexit
 set -o nounset
 
-IMAGE=quay.io/slok/kube-code-generator:v1.18.0
+IMAGE_CLI_GEN=quay.io/slok/kube-code-generator:v1.17.3
+IMAGE_CRD_GEN=quay.io/slok/kube-code-generator:v1.18.0
 ROOT_DIRECTORY=$(dirname "$(readlink -f "$0")")/../
 PROJECT_PACKAGE="github.com/slok/bilrost"
 
@@ -15,7 +16,7 @@ docker run -it --rm \
 	-e APIS_ROOT=${PROJECT_PACKAGE}/pkg/apis \
 	-e GROUPS_VERSION="auth:v1" \
 	-e GENERATION_TARGETS="deepcopy,client" \
-	${IMAGE}
+	${IMAGE_CLI_GEN}
 
 echo "Generating Kubernetes CRD manifests..."
 docker run -it --rm \
@@ -23,4 +24,4 @@ docker run -it --rm \
 	-e GO_PROJECT_ROOT=/src \
 	-e CRD_TYPES_PATH=/src/pkg/apis \
 	-e CRD_OUT_PATH=/src/manifests \
-	${IMAGE} update-crd.sh
+	${IMAGE_CRD_GEN} update-crd.sh
