@@ -50,6 +50,14 @@ spec:
           properties:
             dex:
               description: AuthBackendDex is the spec for a Dex based auth backend.
+              properties:
+                apiAddress:
+                  type: string
+                publicURL:
+                  type: string
+              required:
+              - apiAddress
+              - publicURL
               type: object
           type: object
         status:

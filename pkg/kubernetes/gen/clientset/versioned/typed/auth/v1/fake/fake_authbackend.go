@@ -19,8 +19,6 @@ limitations under the License.
 package fake
 
 import (
-	"context"
-
 	authv1 "github.com/slok/bilrost/pkg/apis/auth/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -40,7 +38,7 @@ var authbackendsResource = schema.GroupVersionResource{Group: "auth.bilrost.slok
 var authbackendsKind = schema.GroupVersionKind{Group: "auth.bilrost.slok.dev", Version: "v1", Kind: "AuthBackend"}
 
 // Get takes name of the authBackend, and returns the corresponding authBackend object, and an error if there is any.
-func (c *FakeAuthBackends) Get(ctx context.Context, name string, options v1.GetOptions) (result *authv1.AuthBackend, err error) {
+func (c *FakeAuthBackends) Get(name string, options v1.GetOptions) (result *authv1.AuthBackend, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootGetAction(authbackendsResource, name), &authv1.AuthBackend{})
 	if obj == nil {
@@ -50,7 +48,7 @@ func (c *FakeAuthBackends) Get(ctx context.Context, name string, options v1.GetO
 }
 
 // List takes label and field selectors, and returns the list of AuthBackends that match those selectors.
-func (c *FakeAuthBackends) List(ctx context.Context, opts v1.ListOptions) (result *authv1.AuthBackendList, err error) {
+func (c *FakeAuthBackends) List(opts v1.ListOptions) (result *authv1.AuthBackendList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootListAction(authbackendsResource, authbackendsKind, opts), &authv1.AuthBackendList{})
 	if obj == nil {
@@ -71,13 +69,13 @@ func (c *FakeAuthBackends) List(ctx context.Context, opts v1.ListOptions) (resul
 }
 
 // Watch returns a watch.Interface that watches the requested authBackends.
-func (c *FakeAuthBackends) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeAuthBackends) Watch(opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewRootWatchAction(authbackendsResource, opts))
 }
 
 // Create takes the representation of a authBackend and creates it.  Returns the server's representation of the authBackend, and an error, if there is any.
-func (c *FakeAuthBackends) Create(ctx context.Context, authBackend *authv1.AuthBackend, opts v1.CreateOptions) (result *authv1.AuthBackend, err error) {
+func (c *FakeAuthBackends) Create(authBackend *authv1.AuthBackend) (result *authv1.AuthBackend, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootCreateAction(authbackendsResource, authBackend), &authv1.AuthBackend{})
 	if obj == nil {
@@ -87,7 +85,7 @@ func (c *FakeAuthBackends) Create(ctx context.Context, authBackend *authv1.AuthB
 }
 
 // Update takes the representation of a authBackend and updates it. Returns the server's representation of the authBackend, and an error, if there is any.
-func (c *FakeAuthBackends) Update(ctx context.Context, authBackend *authv1.AuthBackend, opts v1.UpdateOptions) (result *authv1.AuthBackend, err error) {
+func (c *FakeAuthBackends) Update(authBackend *authv1.AuthBackend) (result *authv1.AuthBackend, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootUpdateAction(authbackendsResource, authBackend), &authv1.AuthBackend{})
 	if obj == nil {
@@ -98,7 +96,7 @@ func (c *FakeAuthBackends) Update(ctx context.Context, authBackend *authv1.AuthB
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeAuthBackends) UpdateStatus(ctx context.Context, authBackend *authv1.AuthBackend, opts v1.UpdateOptions) (*authv1.AuthBackend, error) {
+func (c *FakeAuthBackends) UpdateStatus(authBackend *authv1.AuthBackend) (*authv1.AuthBackend, error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootUpdateSubresourceAction(authbackendsResource, "status", authBackend), &authv1.AuthBackend{})
 	if obj == nil {
@@ -108,22 +106,22 @@ func (c *FakeAuthBackends) UpdateStatus(ctx context.Context, authBackend *authv1
 }
 
 // Delete takes name of the authBackend and deletes it. Returns an error if one occurs.
-func (c *FakeAuthBackends) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
+func (c *FakeAuthBackends) Delete(name string, options *v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewRootDeleteAction(authbackendsResource, name), &authv1.AuthBackend{})
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeAuthBackends) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(authbackendsResource, listOpts)
+func (c *FakeAuthBackends) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
+	action := testing.NewRootDeleteCollectionAction(authbackendsResource, listOptions)
 
 	_, err := c.Fake.Invokes(action, &authv1.AuthBackendList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched authBackend.
-func (c *FakeAuthBackends) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *authv1.AuthBackend, err error) {
+func (c *FakeAuthBackends) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *authv1.AuthBackend, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootPatchSubresourceAction(authbackendsResource, name, pt, data, subresources...), &authv1.AuthBackend{})
 	if obj == nil {
