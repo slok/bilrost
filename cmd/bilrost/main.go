@@ -15,9 +15,12 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
+	authbackendfactory "github.com/slok/bilrost/internal/authbackend/factory"
 	"github.com/slok/bilrost/internal/controller"
 	kubernetesclient "github.com/slok/bilrost/internal/kubernetes/client"
 	"github.com/slok/bilrost/internal/log"
+	"github.com/slok/bilrost/internal/security"
+	storagek8s "github.com/slok/bilrost/internal/storage/kubernetes"
 )
 
 // Run runs the main application.
@@ -47,6 +50,22 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("could not create K8S Bilrost client: %w", err)
 	}
+	kCoreCli, err := kubernetesclient.BaseFactory.NewCoreClient(context.TODO(), kcfg)
+	if err != nil {
+		return fmt.Errorf("could not create K8S core client: %w", err)
+	}
+
+	// Create services.
+	k8sRepo := storagek8s.NewRepository(kBilrostCli)
+	authBackFactory := authbackendfactory.NewFactory(logger)
+	secSvc, err := security.NewService(security.ServiceConfig{
+		AuthBackendRepoFactory: authBackFactory,
+		AuthBackendRepo:        k8sRepo,
+		Logger:                 logger,
+	})
+	if err != nil {
+		return fmt.Errorf("could not create security service")
+	}
 
 	// Prepare our run entrypoints.
 	var g run.Group
@@ -75,7 +94,6 @@ func Run() error {
 
 	// Backend Auth controller.
 	{
-
 		baCtrl, err := koopercontroller.New(&koopercontroller.Config{
 			Handler:              controller.NewAuthBackendHandler(logger),
 			Retriever:            controller.NewAuthBackendRetriever(kBilrostCli),
@@ -92,6 +110,41 @@ func Run() error {
 		g.Add(
 			func() error {
 				return baCtrl.Run(stopC)
+			},
+			func(_ error) {
+				close(stopC)
+			},
+		)
+	}
+
+	// Ingress controller (When ingress mode is enabled).
+	if cmdCfg.IngressMode {
+		logger.Infof("ingress mode has been enabled")
+
+		handler, err := controller.NewIngressHandler(controller.IngressHandlerConfig{
+			SecuritySvc: secSvc,
+			Logger:      logger,
+		})
+		if err != nil {
+			return fmt.Errorf("could not create ingress handler: %w", err)
+		}
+
+		ingCtrl, err := koopercontroller.New(&koopercontroller.Config{
+			Handler:              handler,
+			Retriever:            controller.NewIngressRetriever(cmdCfg.Namespace, kCoreCli),
+			Logger:               kooperLogger,
+			Name:                 "ingress-controller",
+			ConcurrentWorkers:    3,
+			ProcessingJobRetries: 2,
+		})
+		if err != nil {
+			return fmt.Errorf("could not create backend auth kubernetes controller: %w", err)
+		}
+
+		stopC := make(chan struct{})
+		g.Add(
+			func() error {
+				return ingCtrl.Run(stopC)
 			},
 			func(_ error) {
 				close(stopC)

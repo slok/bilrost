@@ -8,15 +8,23 @@ import (
 
 	"github.com/slok/bilrost/internal/authbackend"
 	"github.com/slok/bilrost/internal/authbackend/dex"
+	"github.com/slok/bilrost/internal/log"
 	"github.com/slok/bilrost/internal/model"
 )
 
-type factory int
+type factory struct {
+	logger log.Logger
+}
 
 // Default is the default auth backend factory.
-const Default = factory(0)
+var Default = factory{logger: log.Dummy}
 
-func (factory) GetAppRegisterer(ab model.AuthBackend) (authbackend.AppRegisterer, error) {
+// NewFactory returns a new authbackend factory.
+func NewFactory(logger log.Logger) authbackend.AppRegistererFactory {
+	return factory{logger: logger}
+}
+
+func (f factory) GetAppRegisterer(ab model.AuthBackend) (authbackend.AppRegisterer, error) {
 	switch {
 	// Dex client.
 	// TODO(slok): Use an internal cache and return lazy?.
@@ -26,7 +34,7 @@ func (factory) GetAppRegisterer(ab model.AuthBackend) (authbackend.AppRegisterer
 			return nil, fmt.Errorf("could not create GRPC Dex API client: %w", err)
 		}
 		dexCli := dexapi.NewDexClient(conn)
-		return dex.NewAppRegisterer(dexCli), nil
+		return dex.NewAppRegisterer(dexCli, f.logger), nil
 	}
 
 	return nil, fmt.Errorf("unknown auth backend type")
