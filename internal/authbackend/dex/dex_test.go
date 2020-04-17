@@ -12,6 +12,7 @@ import (
 	"github.com/slok/bilrost/internal/authbackend"
 	"github.com/slok/bilrost/internal/authbackend/dex"
 	"github.com/slok/bilrost/internal/authbackend/dex/dexmock"
+	"github.com/slok/bilrost/internal/log"
 )
 
 func TestRegisterApp(t *testing.T) {
@@ -56,7 +57,7 @@ func TestRegisterApp(t *testing.T) {
 			mdex := &dexmock.Client{}
 			test.mock(mdex)
 
-			ar := dex.NewAppRegisterer(mdex)
+			ar := dex.NewAppRegisterer(mdex, log.Dummy)
 			err := ar.RegisterApp(context.TODO(), test.oidcApp)
 
 			if test.expErr {
@@ -99,7 +100,7 @@ func TestUnregisterApp(t *testing.T) {
 			mdex := &dexmock.Client{}
 			test.mock(mdex)
 
-			ar := dex.NewAppRegisterer(mdex)
+			ar := dex.NewAppRegisterer(mdex, log.Dummy)
 			err := ar.UnregisterApp(context.TODO(), test.id)
 
 			if test.expErr {

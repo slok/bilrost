@@ -7,6 +7,7 @@ import (
 	dexapi "github.com/dexidp/dex/api"
 
 	"github.com/slok/bilrost/internal/authbackend"
+	"github.com/slok/bilrost/internal/log"
 )
 
 // Client is the dex client interface.
@@ -17,13 +18,15 @@ type Client interface {
 //go:generate mockery -case underscore -output dexmock -outpkg dexmock -name Client
 
 type appRegisterer struct {
-	cli Client
+	cli    Client
+	logger log.Logger
 }
 
 // NewAppRegisterer returns a new application registerer for a dex backend.
-func NewAppRegisterer(cli Client) authbackend.AppRegisterer {
+func NewAppRegisterer(cli Client, logger log.Logger) authbackend.AppRegisterer {
 	return appRegisterer{
-		cli: cli,
+		cli:    cli,
+		logger: logger.WithKV(log.KV{"service": "authbackend.dex.AppRegisterer"}),
 	}
 }
 
@@ -42,6 +45,9 @@ func (a appRegisterer) RegisterApp(ctx context.Context, app authbackend.OIDCApp)
 	if err != nil {
 		return fmt.Errorf("could not register application on Dex: %w", err)
 	}
+
+	a.logger.WithKV(log.KV{"app": app.Name, "callbackURL": app.CallBackURL}).
+		Infof("app registered as a client on Dex backend")
 
 	return nil
 }
