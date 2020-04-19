@@ -12,25 +12,42 @@ import (
 	"github.com/slok/bilrost/internal/authbackend"
 	"github.com/slok/bilrost/internal/authbackend/authbackendmock"
 	"github.com/slok/bilrost/internal/model"
+	"github.com/slok/bilrost/internal/proxy"
+	"github.com/slok/bilrost/internal/proxy/proxymock"
 	"github.com/slok/bilrost/internal/security"
 	"github.com/slok/bilrost/internal/security/securitymock"
 )
 
 func TestSecureApp(t *testing.T) {
+	type testMocks struct {
+		abRepo        *securitymock.AuthBackendRepository
+		abAppReg      *authbackendmock.AppRegisterer
+		abAppRegFact  *authbackendmock.AppRegistererFactory
+		oidcProxyProv *proxymock.OIDCProvisioner
+	}
+
 	tests := map[string]struct {
 		app    model.App
-		mock   func(abrm *securitymock.AuthBackendRepository, abm *authbackendmock.AppRegisterer)
+		mock   func(m testMocks)
 		expErr bool
 	}{
-		"A correct secured app should make all the steps correctly.": {
+		"A correct secured app with Dex backend should make all the steps correctly.": {
 			app: model.App{
 				ID:            "test-ns/my-app",
 				AuthBackendID: "test-ns-dex-backend",
 				Host:          "my.app.slok.dev",
+				UpstreamURL:   "http://internal-app.svc.cluster.local",
 			},
-			mock: func(abRepo *securitymock.AuthBackendRepository, abAppReg *authbackendmock.AppRegisterer) {
+			mock: func(m testMocks) {
 				// Get the backend information.
-				abRepo.On("GetAuthBackend", mock.Anything, "test-ns-dex-backend").Once().Return(&model.AuthBackend{}, nil)
+				ab := &model.AuthBackend{
+					ID: "test-dex",
+					Dex: &model.AuthBackendDex{
+						APIURL:    "internal.cluster.url:81",
+						PublicURL: "https://test-dex.dev",
+					},
+				}
+				m.abRepo.On("GetAuthBackend", mock.Anything, "test-ns-dex-backend").Once().Return(ab, nil)
 
 				// The app should be registered.
 				expOIDCApp := authbackend.OIDCApp{
@@ -39,21 +56,40 @@ func TestSecureApp(t *testing.T) {
 					CallBackURL: "https://my.app.slok.dev/oauth2/callback",
 					Secret:      "TODO",
 				}
-				abAppReg.On("RegisterApp", mock.Anything, expOIDCApp).Once().Return(nil)
+				m.abAppReg.On("RegisterApp", mock.Anything, expOIDCApp).Once().Return(nil)
+
+				// The proxy should be provisioned.
+				expProxySettings := proxy.OIDCProxySettings{
+					URL:         "https://my.app.slok.dev",
+					UpstreamURL: "http://internal-app.svc.cluster.local",
+					IssuerURL:   "https://test-dex.dev",
+					AppID:       "test-ns/my-app",
+					AppSecret:   "TODO",
+				}
+				m.oidcProxyProv.On("Provision", mock.Anything, expProxySettings).Once().Return(nil)
 			},
 		},
 
 		"Failing while getting the auth backend shoult stop the process with failure.": {
-			mock: func(abRepo *securitymock.AuthBackendRepository, abAppReg *authbackendmock.AppRegisterer) {
-				abRepo.On("GetAuthBackend", mock.Anything, mock.Anything).Once().Return(nil, fmt.Errorf("wanted error"))
+			mock: func(m testMocks) {
+				m.abRepo.On("GetAuthBackend", mock.Anything, mock.Anything).Once().Return(nil, fmt.Errorf("wanted error"))
 			},
 			expErr: true,
 		},
 
-		"Failing while Registering the app on the auth backend shoult stop the process with failure.": {
-			mock: func(abRepo *securitymock.AuthBackendRepository, abAppReg *authbackendmock.AppRegisterer) {
-				abRepo.On("GetAuthBackend", mock.Anything, mock.Anything).Once().Return(&model.AuthBackend{}, nil)
-				abAppReg.On("RegisterApp", mock.Anything, mock.Anything).Once().Return(fmt.Errorf("wanted error"))
+		"Failing while registering the app on the auth backend should stop the process with failure.": {
+			mock: func(m testMocks) {
+				m.abRepo.On("GetAuthBackend", mock.Anything, mock.Anything).Once().Return(&model.AuthBackend{}, nil)
+				m.abAppReg.On("RegisterApp", mock.Anything, mock.Anything).Once().Return(fmt.Errorf("wanted error"))
+			},
+			expErr: true,
+		},
+
+		"Failing while provisioning the proxy should stop the process with failure.": {
+			mock: func(m testMocks) {
+				m.abRepo.On("GetAuthBackend", mock.Anything, mock.Anything).Once().Return(&model.AuthBackend{}, nil)
+				m.abAppReg.On("RegisterApp", mock.Anything, mock.Anything).Once().Return(nil)
+				m.oidcProxyProv.On("Provision", mock.Anything, mock.Anything).Once().Return(fmt.Errorf("wanted error"))
 			},
 			expErr: true,
 		},
@@ -65,16 +101,20 @@ func TestSecureApp(t *testing.T) {
 			require := require.New(t)
 
 			// Mocks.
-			abrm := &securitymock.AuthBackendRepository{}
-			abfm := &authbackendmock.AppRegistererFactory{}
-			abm := &authbackendmock.AppRegisterer{}
-			abfm.On("GetAppRegisterer", mock.Anything).Return(abm, nil)
-			test.mock(abrm, abm)
+			m := testMocks{
+				abRepo:        &securitymock.AuthBackendRepository{},
+				abAppReg:      &authbackendmock.AppRegisterer{},
+				abAppRegFact:  &authbackendmock.AppRegistererFactory{},
+				oidcProxyProv: &proxymock.OIDCProvisioner{},
+			}
+			m.abAppRegFact.On("GetAppRegisterer", mock.Anything).Return(m.abAppReg, nil)
+			test.mock(m)
 
 			// Execute.
 			cfg := security.ServiceConfig{
-				AuthBackendRepo:        abrm,
-				AuthBackendRepoFactory: abfm,
+				AuthBackendRepo:        m.abRepo,
+				AuthBackendRepoFactory: m.abAppRegFact,
+				OIDCProxyProvisioner:   m.oidcProxyProv,
 			}
 			svc, err := security.NewService(cfg)
 			require.NoError(err)
@@ -85,9 +125,10 @@ func TestSecureApp(t *testing.T) {
 			if test.expErr {
 				assert.Error(err)
 			} else if assert.NoError(err) {
-				abrm.AssertExpectations(t)
-				abfm.AssertExpectations(t)
-				abm.AssertExpectations(t)
+				m.abRepo.AssertExpectations(t)
+				m.abAppReg.AssertExpectations(t)
+				m.abAppRegFact.AssertExpectations(t)
+				m.oidcProxyProv.AssertExpectations(t)
 			}
 		})
 	}

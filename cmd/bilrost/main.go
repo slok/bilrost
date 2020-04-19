@@ -17,10 +17,11 @@ import (
 
 	authbackendfactory "github.com/slok/bilrost/internal/authbackend/factory"
 	"github.com/slok/bilrost/internal/controller"
+	"github.com/slok/bilrost/internal/kubernetes"
 	kubernetesclient "github.com/slok/bilrost/internal/kubernetes/client"
 	"github.com/slok/bilrost/internal/log"
+	"github.com/slok/bilrost/internal/proxy/oauth2proxy"
 	"github.com/slok/bilrost/internal/security"
-	storagek8s "github.com/slok/bilrost/internal/storage/kubernetes"
 )
 
 // Run runs the main application.
@@ -56,11 +57,13 @@ func Run() error {
 	}
 
 	// Create services.
-	k8sRepo := storagek8s.NewRepository(kBilrostCli)
+	kubeSvc := kubernetes.NewService(kCoreCli, kBilrostCli, logger)
 	authBackFactory := authbackendfactory.NewFactory(logger)
+	proxyProvisioner := oauth2proxy.NewOIDCProvisioner(kubeSvc, logger)
 	secSvc, err := security.NewService(security.ServiceConfig{
+		OIDCProxyProvisioner:   proxyProvisioner,
 		AuthBackendRepoFactory: authBackFactory,
-		AuthBackendRepo:        k8sRepo,
+		AuthBackendRepo:        kubeSvc,
 		Logger:                 logger,
 	})
 	if err != nil {
@@ -96,7 +99,7 @@ func Run() error {
 	{
 		baCtrl, err := koopercontroller.New(&koopercontroller.Config{
 			Handler:              controller.NewAuthBackendHandler(logger),
-			Retriever:            controller.NewAuthBackendRetriever(kBilrostCli),
+			Retriever:            controller.NewAuthBackendRetriever(kubeSvc),
 			Logger:               kooperLogger,
 			Name:                 "backend-auth-controller",
 			ConcurrentWorkers:    3,
@@ -131,7 +134,7 @@ func Run() error {
 
 		ingCtrl, err := koopercontroller.New(&koopercontroller.Config{
 			Handler:              handler,
-			Retriever:            controller.NewIngressRetriever(cmdCfg.Namespace, kCoreCli),
+			Retriever:            controller.NewIngressRetriever(cmdCfg.Namespace, kubeSvc),
 			Logger:               kooperLogger,
 			Name:                 "ingress-controller",
 			ConcurrentWorkers:    3,
