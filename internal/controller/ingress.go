@@ -97,16 +97,29 @@ func (i ingressHandler) Handle(ctx context.Context, obj runtime.Object) error {
 
 	logger.Infof("handling ingress...")
 
-	if len(ing.Spec.Rules) != 1 {
-		return fmt.Errorf("required rules on ingress is 1")
+	rulesLen := len(ing.Spec.Rules)
+	if rulesLen != 1 {
+		return fmt.Errorf("required rules on ingress is 1, got %d", rulesLen)
+	}
+
+	pathsLen := len(ing.Spec.Rules[0].HTTP.Paths)
+	if pathsLen != 1 {
+		return fmt.Errorf("required paths on ingress is 1, got %d", pathsLen)
 	}
 
 	app := model.App{
 		ID:            fmt.Sprintf("%s/%s", ing.Namespace, ing.Name),
 		AuthBackendID: backendID,
 		Host:          ing.Spec.Rules[0].Host,
-		// TODO(slok): Translate svc to URL (this involves port).
-		UpstreamURL: "http://localhost:8080",
+		Ingress: model.KubernetesIngress{
+			Name:      ing.Name,
+			Namespace: ing.Namespace,
+			Upstream: model.KubernetesService{
+				Name:           ing.Spec.Rules[0].HTTP.Paths[0].Backend.ServiceName,
+				Namespace:      ing.Namespace,
+				PortOrPortName: ing.Spec.Rules[0].HTTP.Paths[0].Backend.ServicePort.String(),
+			},
+		},
 	}
 	err := i.securitySvc.SecureApp(ctx, app)
 	if err != nil {

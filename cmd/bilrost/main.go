@@ -61,13 +61,14 @@ func Run() error {
 	authBackFactory := authbackendfactory.NewFactory(logger)
 	proxyProvisioner := oauth2proxy.NewOIDCProvisioner(kubeSvc, logger)
 	secSvc, err := security.NewService(security.ServiceConfig{
+		ServiceTranslator:      kubeSvc,
 		OIDCProxyProvisioner:   proxyProvisioner,
 		AuthBackendRepoFactory: authBackFactory,
 		AuthBackendRepo:        kubeSvc,
 		Logger:                 logger,
 	})
 	if err != nil {
-		return fmt.Errorf("could not create security service")
+		return fmt.Errorf("could not create security service: %w", err)
 	}
 
 	// Prepare our run entrypoints.

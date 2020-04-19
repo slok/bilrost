@@ -18,5 +18,19 @@ type App struct {
 	ID            string
 	AuthBackendID string
 	Host          string
-	UpstreamURL   string
+	Ingress       KubernetesIngress
+}
+
+// KubernetesIngress is the kubernetes service related to the App
+type KubernetesIngress struct {
+	Name      string
+	Namespace string
+	Upstream  KubernetesService
+}
+
+// KubernetesService is the kubernetes service related to the App.
+type KubernetesService struct {
+	Name           string
+	Namespace      string
+	PortOrPortName string
 }
