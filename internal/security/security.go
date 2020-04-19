@@ -8,6 +8,7 @@ import (
 	authbackendfactory "github.com/slok/bilrost/internal/authbackend/factory"
 	"github.com/slok/bilrost/internal/log"
 	"github.com/slok/bilrost/internal/model"
+	"github.com/slok/bilrost/internal/proxy"
 )
 
 // Service is the application service where all the security of an application
@@ -18,13 +19,15 @@ type Service interface {
 }
 
 type service struct {
-	abRepo       AuthBackendRepository
-	abRegFactory authbackend.AppRegistererFactory
-	logger       log.Logger
+	proxyProvisioner proxy.OIDCProvisioner
+	abRepo           AuthBackendRepository
+	abRegFactory     authbackend.AppRegistererFactory
+	logger           log.Logger
 }
 
 // ServiceConfig is the service configuration.
 type ServiceConfig struct {
+	OIDCProxyProvisioner   proxy.OIDCProvisioner
 	AuthBackendRepo        AuthBackendRepository
 	AuthBackendRepoFactory authbackend.AppRegistererFactory
 	Logger                 log.Logger
@@ -55,9 +58,10 @@ func NewService(cfg ServiceConfig) (Service, error) {
 	}
 
 	return service{
-		abRepo:       cfg.AuthBackendRepo,
-		abRegFactory: cfg.AuthBackendRepoFactory,
-		logger:       cfg.Logger,
+		proxyProvisioner: cfg.OIDCProxyProvisioner,
+		abRepo:           cfg.AuthBackendRepo,
+		abRegFactory:     cfg.AuthBackendRepoFactory,
+		logger:           cfg.Logger,
 	}, nil
 }
 
@@ -84,6 +88,22 @@ func (s service) SecureApp(ctx context.Context, app model.App) error {
 	}
 
 	// Create the proxy.
+	abPublicURL := ""
+	switch {
+	case ab.Dex != nil:
+		abPublicURL = ab.Dex.PublicURL
+	}
+	proxySettings := proxy.OIDCProxySettings{
+		URL:         fmt.Sprintf("https://%s", app.Host),
+		UpstreamURL: app.UpstreamURL,
+		IssuerURL:   abPublicURL,
+		AppID:       oa.ID,
+		AppSecret:   oa.Secret,
+	}
+	err = s.proxyProvisioner.Provision(ctx, proxySettings)
+	if err != nil {
+		return fmt.Errorf("could not provision OIDC proxy: %w", err)
+	}
 
 	// Update ingress.
 

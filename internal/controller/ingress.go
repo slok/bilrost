@@ -9,7 +9,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/slok/bilrost/internal/log"
@@ -17,14 +16,21 @@ import (
 	"github.com/slok/bilrost/internal/security"
 )
 
+// IngressControllerKubeService is the service to manage k8s resources by the ingress
+// controller.
+type IngressControllerKubeService interface {
+	ListIngresses(ctx context.Context, ns string, labelSelector map[string]string) (*networkingv1beta.IngressList, error)
+	WatchIngresses(ctx context.Context, ns string, labelSelector map[string]string) (watch.Interface, error)
+}
+
 // NewIngressRetriever returns the retriever for the ingress controller.
-func NewIngressRetriever(ns string, cli kubernetes.Interface) controller.Retriever {
+func NewIngressRetriever(ns string, kubeSvc IngressControllerKubeService) controller.Retriever {
 	return controller.MustRetrieverFromListerWatcher(&cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-			return cli.NetworkingV1beta1().Ingresses(ns).List(options)
+			return kubeSvc.ListIngresses(context.TODO(), ns, map[string]string{})
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-			return cli.NetworkingV1beta1().Ingresses(ns).Watch(options)
+			return kubeSvc.WatchIngresses(context.TODO(), ns, map[string]string{})
 		},
 	})
 }
@@ -99,6 +105,8 @@ func (i ingressHandler) Handle(ctx context.Context, obj runtime.Object) error {
 		ID:            fmt.Sprintf("%s/%s", ing.Namespace, ing.Name),
 		AuthBackendID: backendID,
 		Host:          ing.Spec.Rules[0].Host,
+		// TODO(slok): Translate svc to URL (this involves port).
+		UpstreamURL: "http://localhost:8080",
 	}
 	err := i.securitySvc.SecureApp(ctx, app)
 	if err != nil {

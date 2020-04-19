@@ -18,4 +18,5 @@ type App struct {
 	ID            string
 	AuthBackendID string
 	Host          string
+	UpstreamURL   string
 }
