@@ -15,6 +15,8 @@ import (
 	"github.com/slok/bilrost/internal/proxy"
 )
 
+var defaultScopes = []string{"openid", "email", "profile", "groups", "offline_access"}
+
 // KubernetesRepository is the proxy kubernetes service used to communicate with Kubernetes.
 type KubernetesRepository interface {
 	EnsureDeployment(ctx context.Context, dep *appsv1.Deployment) error
@@ -37,6 +39,12 @@ func NewOIDCProvisioner(kuberepo KubernetesRepository, logger log.Logger) proxy.
 }
 
 func (p provisioner) Provision(ctx context.Context, settings proxy.OIDCProxySettings) error {
+	// Set defaults.
+	if len(settings.Scopes) == 0 {
+		settings.Scopes = defaultScopes
+	}
+
+	// Provision
 	dep, err := p.provisionDeployment(ctx, settings)
 	if err != nil {
 		return fmt.Errorf("could not provision deployment on Kubernetes: %w", err)

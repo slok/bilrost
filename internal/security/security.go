@@ -11,6 +11,20 @@ import (
 	"github.com/slok/bilrost/internal/proxy"
 )
 
+// AuthBackendRepository knows how to get AuthBackends from a storage.
+type AuthBackendRepository interface {
+	GetAuthBackend(ctx context.Context, id string) (*model.AuthBackend, error)
+}
+
+//go:generate mockery -case underscore -output securitymock -outpkg securitymock -name AuthBackendRepository
+
+// KubeServiceTranslator knows how to translate a kubernetes service to a URL.
+type KubeServiceTranslator interface {
+	GetServiceHostAndPort(ctx context.Context, svc model.KubernetesService) (string, int, error)
+}
+
+//go:generate mockery -case underscore -output securitymock -outpkg securitymock -name KubeServiceTranslator
+
 // Service is the application service where all the security of an application
 // happens.
 type Service interface {
@@ -22,11 +36,13 @@ type service struct {
 	proxyProvisioner proxy.OIDCProvisioner
 	abRepo           AuthBackendRepository
 	abRegFactory     authbackend.AppRegistererFactory
+	svcTranslator    KubeServiceTranslator
 	logger           log.Logger
 }
 
 // ServiceConfig is the service configuration.
 type ServiceConfig struct {
+	ServiceTranslator      KubeServiceTranslator
 	OIDCProxyProvisioner   proxy.OIDCProvisioner
 	AuthBackendRepo        AuthBackendRepository
 	AuthBackendRepoFactory authbackend.AppRegistererFactory
@@ -47,6 +63,14 @@ func (c *ServiceConfig) defaults() error {
 		c.AuthBackendRepoFactory = authbackendfactory.Default
 	}
 
+	if c.OIDCProxyProvisioner == nil {
+		return fmt.Errorf("an OIDC proxy provisioner is required")
+	}
+
+	if c.ServiceTranslator == nil {
+		return fmt.Errorf("a Kubernetes service translator is required")
+	}
+
 	return nil
 }
 
@@ -58,6 +82,7 @@ func NewService(cfg ServiceConfig) (Service, error) {
 	}
 
 	return service{
+		svcTranslator:    cfg.ServiceTranslator,
 		proxyProvisioner: cfg.OIDCProxyProvisioner,
 		abRepo:           cfg.AuthBackendRepo,
 		abRegFactory:     cfg.AuthBackendRepoFactory,
@@ -87,6 +112,12 @@ func (s service) SecureApp(ctx context.Context, app model.App) error {
 		return fmt.Errorf("could not register oauth application on backend: %w", err)
 	}
 
+	// Get Upstream URL.
+	host, port, err := s.svcTranslator.GetServiceHostAndPort(ctx, app.Ingress.Upstream)
+	if err != nil {
+		return fmt.Errorf("could not translate ingress upstream service to host and port: %w", err)
+	}
+
 	// Create the proxy.
 	abPublicURL := ""
 	switch {
@@ -94,8 +125,9 @@ func (s service) SecureApp(ctx context.Context, app model.App) error {
 		abPublicURL = ab.Dex.PublicURL
 	}
 	proxySettings := proxy.OIDCProxySettings{
-		URL:         fmt.Sprintf("https://%s", app.Host),
-		UpstreamURL: app.UpstreamURL,
+		URL: fmt.Sprintf("https://%s", app.Host),
+		// TODO(slok): Is alwasy http? https?
+		UpstreamURL: fmt.Sprintf("http://%s:%d", host, port),
 		IssuerURL:   abPublicURL,
 		AppID:       oa.ID,
 		AppSecret:   oa.Secret,
@@ -106,6 +138,7 @@ func (s service) SecureApp(ctx context.Context, app model.App) error {
 	}
 
 	// Update ingress.
+	// TODO.
 
 	return nil
 }

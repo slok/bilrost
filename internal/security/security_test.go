@@ -20,6 +20,7 @@ import (
 
 func TestSecureApp(t *testing.T) {
 	type testMocks struct {
+		svcTranslator *securitymock.KubeServiceTranslator
 		abRepo        *securitymock.AuthBackendRepository
 		abAppReg      *authbackendmock.AppRegisterer
 		abAppRegFact  *authbackendmock.AppRegistererFactory
@@ -36,7 +37,15 @@ func TestSecureApp(t *testing.T) {
 				ID:            "test-ns/my-app",
 				AuthBackendID: "test-ns-dex-backend",
 				Host:          "my.app.slok.dev",
-				UpstreamURL:   "http://internal-app.svc.cluster.local",
+				Ingress: model.KubernetesIngress{
+					Name:      "my-app",
+					Namespace: "test-ns",
+					Upstream: model.KubernetesService{
+						Name:           "internal-app",
+						Namespace:      "test-ns",
+						PortOrPortName: "http",
+					},
+				},
 			},
 			mock: func(m testMocks) {
 				// Get the backend information.
@@ -58,10 +67,18 @@ func TestSecureApp(t *testing.T) {
 				}
 				m.abAppReg.On("RegisterApp", mock.Anything, expOIDCApp).Once().Return(nil)
 
+				// The service should be translated to URL.
+				expSvc := model.KubernetesService{
+					Name:           "internal-app",
+					Namespace:      "test-ns",
+					PortOrPortName: "http",
+				}
+				m.svcTranslator.On("GetServiceHostAndPort", mock.Anything, expSvc).Once().Return("internal-app.my-ns.svc.cluster.local", 8080, nil)
+
 				// The proxy should be provisioned.
 				expProxySettings := proxy.OIDCProxySettings{
 					URL:         "https://my.app.slok.dev",
-					UpstreamURL: "http://internal-app.svc.cluster.local",
+					UpstreamURL: "http://internal-app.my-ns.svc.cluster.local:8080",
 					IssuerURL:   "https://test-dex.dev",
 					AppID:       "test-ns/my-app",
 					AppSecret:   "TODO",
@@ -85,10 +102,20 @@ func TestSecureApp(t *testing.T) {
 			expErr: true,
 		},
 
+		"Failing while translating the service to a URL should stop the process with failure.": {
+			mock: func(m testMocks) {
+				m.abRepo.On("GetAuthBackend", mock.Anything, mock.Anything).Once().Return(&model.AuthBackend{}, nil)
+				m.abAppReg.On("RegisterApp", mock.Anything, mock.Anything).Once().Return(nil)
+				m.svcTranslator.On("GetServiceHostAndPort", mock.Anything, mock.Anything).Once().Return("", 0, fmt.Errorf("wanted error"))
+			},
+			expErr: true,
+		},
+
 		"Failing while provisioning the proxy should stop the process with failure.": {
 			mock: func(m testMocks) {
 				m.abRepo.On("GetAuthBackend", mock.Anything, mock.Anything).Once().Return(&model.AuthBackend{}, nil)
 				m.abAppReg.On("RegisterApp", mock.Anything, mock.Anything).Once().Return(nil)
+				m.svcTranslator.On("GetServiceHostAndPort", mock.Anything, mock.Anything).Once().Return("", 0, nil)
 				m.oidcProxyProv.On("Provision", mock.Anything, mock.Anything).Once().Return(fmt.Errorf("wanted error"))
 			},
 			expErr: true,
@@ -102,6 +129,7 @@ func TestSecureApp(t *testing.T) {
 
 			// Mocks.
 			m := testMocks{
+				svcTranslator: &securitymock.KubeServiceTranslator{},
 				abRepo:        &securitymock.AuthBackendRepository{},
 				abAppReg:      &authbackendmock.AppRegisterer{},
 				abAppRegFact:  &authbackendmock.AppRegistererFactory{},
@@ -112,6 +140,7 @@ func TestSecureApp(t *testing.T) {
 
 			// Execute.
 			cfg := security.ServiceConfig{
+				ServiceTranslator:      m.svcTranslator,
 				AuthBackendRepo:        m.abRepo,
 				AuthBackendRepoFactory: m.abAppRegFact,
 				OIDCProxyProvisioner:   m.oidcProxyProv,

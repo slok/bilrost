@@ -3,10 +3,11 @@ package kubernetes
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1beta "k8s.io/api/networking/v1beta1"
+	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -79,7 +80,7 @@ func (s Service) EnsureDeployment(_ context.Context, dep *appsv1.Deployment) err
 		}
 		_, err = s.coreCli.AppsV1().Deployments(dep.Namespace).Create(dep)
 		if err != nil {
-			return fmt.Errorf("could not create deployment")
+			return fmt.Errorf("could not create deployment: %w", err)
 		}
 		logger.Debugf("deployment has been created")
 	}
@@ -88,7 +89,7 @@ func (s Service) EnsureDeployment(_ context.Context, dep *appsv1.Deployment) err
 	dep.ObjectMeta.ResourceVersion = storedDep.ResourceVersion
 	_, err = s.coreCli.AppsV1().Deployments(dep.Namespace).Update(dep)
 	if err != nil {
-		return fmt.Errorf("could not update deployment")
+		return fmt.Errorf("could not update deployment: %w", err)
 	}
 	logger.Debugf("deployment has been updated")
 
@@ -106,16 +107,17 @@ func (s Service) EnsureService(_ context.Context, svc *corev1.Service) error {
 		}
 		_, err = s.coreCli.CoreV1().Services(svc.Namespace).Create(svc)
 		if err != nil {
-			return fmt.Errorf("could not create service")
+			return fmt.Errorf("could not create service: %w", err)
 		}
 		logger.Debugf("service has been created")
 	}
 
 	// Force overwrite.
 	svc.ObjectMeta.ResourceVersion = storedSvc.ResourceVersion
+	svc.Spec.ClusterIP = storedSvc.Spec.ClusterIP
 	_, err = s.coreCli.CoreV1().Services(svc.Namespace).Update(svc)
 	if err != nil {
-		return fmt.Errorf("could not update service")
+		return fmt.Errorf("could not update service: %w", err)
 	}
 	logger.Debugf("service has been updated")
 
@@ -123,7 +125,7 @@ func (s Service) EnsureService(_ context.Context, svc *corev1.Service) error {
 }
 
 // ListIngresses satisfies controller.IngressControllerKubeService interface.
-func (s Service) ListIngresses(_ context.Context, ns string, labelSelector map[string]string) (*networkingv1beta.IngressList, error) {
+func (s Service) ListIngresses(_ context.Context, ns string, labelSelector map[string]string) (*networkingv1beta1.IngressList, error) {
 	return s.coreCli.NetworkingV1beta1().Ingresses(ns).List(metav1.ListOptions{
 		LabelSelector: labels.Set(labelSelector).String(),
 	})
@@ -150,8 +152,35 @@ func (s Service) WatchAuthBackends(ctx context.Context, labelSelector map[string
 	})
 }
 
+// GetServiceHostAndPort satisifies security.KubeServiceTranslator interface.
+func (s Service) GetServiceHostAndPort(ctx context.Context, svc model.KubernetesService) (string, int, error) {
+	host := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
+	port, err := strconv.Atoi(svc.PortOrPortName)
+	if err == nil {
+		return host, port, nil
+	}
+
+	// Our port is based on a name.
+	// TODO(slok): Optimize with DNS SRV resolution although is worst for development? (make it optional?).
+	service, err := s.coreCli.CoreV1().Services(svc.Namespace).Get(svc.Name, metav1.GetOptions{})
+	if err != nil {
+		return "", 0, fmt.Errorf("could not get Kubernetes service %s/%s: %w", svc.Namespace, svc.Name, err)
+	}
+
+	for _, port := range service.Spec.Ports {
+		if port.Name == svc.PortOrPortName {
+			return host, int(port.Port), nil
+		}
+	}
+
+	return "", 0, fmt.Errorf("missing %s port name on service %s/%s", svc.PortOrPortName, svc.Namespace, svc.Name)
+}
+
 // Interface implementation checks.
-var _ security.AuthBackendRepository = Service{}
-var _ oauth2proxy.KubernetesRepository = Service{}
-var _ controller.IngressControllerKubeService = Service{}
-var _ controller.AuthBackendsControllerKubeService = Service{}
+var (
+	_ security.AuthBackendRepository               = Service{}
+	_ security.KubeServiceTranslator               = Service{}
+	_ oauth2proxy.KubernetesRepository             = Service{}
+	_ controller.IngressControllerKubeService      = Service{}
+	_ controller.AuthBackendsControllerKubeService = Service{}
+)
