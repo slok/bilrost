@@ -124,6 +124,34 @@ func (s Service) EnsureService(_ context.Context, svc *corev1.Service) error {
 	return nil
 }
 
+// GetIngress satisfies oauth2proxy.KubernetesRepository interface.
+func (s Service) GetIngress(ctx context.Context, ns, name string) (*networkingv1beta1.Ingress, error) {
+	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
+
+	ing, err := s.coreCli.NetworkingV1beta1().Ingresses(ns).Get(name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("could not retrieve ingress from Kubernetes: %w", err)
+	}
+
+	logger.Debugf("ingress got")
+
+	return ing, nil
+}
+
+// UpdateIngress satisfies oauth2proxy.KubernetesRepository interface.
+func (s Service) UpdateIngress(ctx context.Context, ingress *networkingv1beta1.Ingress) error {
+	logger := s.logger.WithKV(log.KV{"obj-ns": ingress.Namespace, "obj-name": ingress.Name})
+
+	_, err := s.coreCli.NetworkingV1beta1().Ingresses(ingress.Namespace).Update(ingress)
+	if err != nil {
+		return fmt.Errorf("could not update ingress in Kubernetes: %w", err)
+	}
+
+	logger.Debugf("ingress updated")
+
+	return nil
+}
+
 // ListIngresses satisfies controller.IngressControllerKubeService interface.
 func (s Service) ListIngresses(_ context.Context, ns string, labelSelector map[string]string) (*networkingv1beta1.IngressList, error) {
 	return s.coreCli.NetworkingV1beta1().Ingresses(ns).List(metav1.ListOptions{
@@ -161,7 +189,7 @@ func (s Service) GetServiceHostAndPort(ctx context.Context, svc model.Kubernetes
 	}
 
 	// Our port is based on a name.
-	// TODO(slok): Optimize with DNS SRV resolution although is worst for development? (make it optional?).
+	// TODO(slok): Should we optimize with DNS SRV resolution although is worse for development? make it optional?.
 	service, err := s.coreCli.CoreV1().Services(svc.Namespace).Get(svc.Name, metav1.GetOptions{})
 	if err != nil {
 		return "", 0, fmt.Errorf("could not get Kubernetes service %s/%s: %w", svc.Namespace, svc.Name, err)

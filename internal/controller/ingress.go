@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spotahome/kooper/controller"
-	networkingv1beta "k8s.io/api/networking/v1beta1"
+	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -19,7 +19,7 @@ import (
 // IngressControllerKubeService is the service to manage k8s resources by the ingress
 // controller.
 type IngressControllerKubeService interface {
-	ListIngresses(ctx context.Context, ns string, labelSelector map[string]string) (*networkingv1beta.IngressList, error)
+	ListIngresses(ctx context.Context, ns string, labelSelector map[string]string) (*networkingv1beta1.IngressList, error)
 	WatchIngresses(ctx context.Context, ns string, labelSelector map[string]string) (watch.Interface, error)
 }
 
@@ -81,7 +81,7 @@ func NewIngressHandler(cfg IngressHandlerConfig) (controller.Handler, error) {
 }
 
 func (i ingressHandler) Handle(ctx context.Context, obj runtime.Object) error {
-	ing, ok := obj.(*networkingv1beta.Ingress)
+	ing, ok := obj.(*networkingv1beta1.Ingress)
 	if !ok {
 		i.logger.Debugf("kubernetes received object is not an Ingress")
 		return nil

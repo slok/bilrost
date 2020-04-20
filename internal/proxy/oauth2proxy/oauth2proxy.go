@@ -2,11 +2,13 @@ package oauth2proxy
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -15,12 +17,17 @@ import (
 	"github.com/slok/bilrost/internal/proxy"
 )
 
-var defaultScopes = []string{"openid", "email", "profile", "groups", "offline_access"}
+var (
+	defaultScopes           = []string{"openid", "email", "profile", "groups", "offline_access"}
+	ingressBackupAnnotation = "auth.bilrost.slok.dev/oath2-proxy-backup"
+)
 
 // KubernetesRepository is the proxy kubernetes service used to communicate with Kubernetes.
 type KubernetesRepository interface {
 	EnsureDeployment(ctx context.Context, dep *appsv1.Deployment) error
 	EnsureService(ctx context.Context, svc *corev1.Service) error
+	GetIngress(ctx context.Context, ns, name string) (*networkingv1beta1.Ingress, error)
+	UpdateIngress(ctx context.Context, ingress *networkingv1beta1.Ingress) error
 }
 
 //go:generate mockery -case underscore -output oauth2proxymock -outpkg oauth2proxymock -name KubernetesRepository
@@ -44,7 +51,7 @@ func (p provisioner) Provision(ctx context.Context, settings proxy.OIDCProxySett
 		settings.Scopes = defaultScopes
 	}
 
-	// Provision
+	// Provision proxy.
 	dep, err := p.provisionDeployment(ctx, settings)
 	if err != nil {
 		return fmt.Errorf("could not provision deployment on Kubernetes: %w", err)
@@ -55,16 +62,18 @@ func (p provisioner) Provision(ctx context.Context, settings proxy.OIDCProxySett
 		return fmt.Errorf("could not provision service on Kubernetes: %w", err)
 	}
 
+	// Enable ingress.
+	err = p.updateIngressAndBackup(ctx, settings)
+	if err != nil {
+		return fmt.Errorf("could not update ingress in on Kubernetes to eanble oauth2 proxy service: %w", err)
+	}
+
 	return nil
 }
 
 func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OIDCProxySettings) (*appsv1.Deployment, error) {
-	appNs, appName, err := getKubeNSAndNameFromID(settings.AppID)
-	if err != nil {
-		return nil, err
-	}
 	const proxyInternalPort = 4180
-	name := fmt.Sprintf("%s-bilrost-proxy", appName)
+	name := getResourceName(settings.IngressName)
 	replicas := int32(1)
 	labels := map[string]string{
 		"app.kubernetes.io/managed-by": "bilrost",
@@ -76,7 +85,7 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: appNs,
+			Namespace: settings.IngressNamespace,
 			Labels:    labels,
 			// TODO(slok): Use owner refs or apply our finalizers?.
 		},
@@ -130,13 +139,18 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 		},
 	}
 
-	err = p.kuberepo.EnsureDeployment(ctx, deployment)
+	err := p.kuberepo.EnsureDeployment(ctx, deployment)
 	if err != nil {
 		return nil, fmt.Errorf("could not set up proxy deployment: %w", err)
 	}
 
 	return deployment, nil
 }
+
+const (
+	proxySvcPort = 80
+	proxySvcName = "http"
+)
 
 func (p provisioner) provisionDeploymentService(ctx context.Context, dep *appsv1.Deployment) error {
 	svc := &corev1.Service{
@@ -150,7 +164,8 @@ func (p provisioner) provisionDeploymentService(ctx context.Context, dep *appsv1
 			Selector: dep.Labels,
 			Ports: []corev1.ServicePort{
 				corev1.ServicePort{
-					Port:       80,
+					Port:       proxySvcPort,
+					Name:       proxySvcName,
 					TargetPort: intstr.FromInt(int(dep.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort)),
 				},
 			},
@@ -165,21 +180,62 @@ func (p provisioner) provisionDeploymentService(ctx context.Context, dep *appsv1
 	return nil
 }
 
+func (p provisioner) updateIngressAndBackup(ctx context.Context, settings proxy.OIDCProxySettings) error {
+	ing, err := p.kuberepo.GetIngress(ctx, settings.IngressNamespace, settings.IngressName)
+	if err != nil {
+		return err
+	}
+
+	// Pre checks of the ingress.
+	rulesLen := len(ing.Spec.Rules)
+	if rulesLen != 1 {
+		return fmt.Errorf("ingress required rules is 1, got: %d", rulesLen)
+	}
+	pathsLen := len(ing.Spec.Rules[0].HTTP.Paths)
+	if pathsLen != 1 {
+		return fmt.Errorf("ingress required paths is 1, got: %d", pathsLen)
+	}
+
+	// Do we need to update the ingress?
+	proxyBackend := networkingv1beta1.IngressBackend{
+		ServiceName: getResourceName(settings.IngressName),
+		ServicePort: intstr.FromString(proxySvcName),
+	}
+	currentBackend := ing.Spec.Rules[0].HTTP.Paths[0].Backend
+	if currentBackend == proxyBackend {
+		p.logger.Debugf("ingress already pointing to %s:%s service, ignoring update", proxyBackend.ServiceName, proxyBackend.ServicePort)
+		return nil
+	}
+
+	// Backup original backend.
+	jsonBackend, err := json.Marshal(currentBackend)
+	if err != nil {
+		return fmt.Errorf("could not marshall original ingress backend for backup: %w", err)
+	}
+
+	// Swap ingress to proxy.
+	if ing.Annotations == nil {
+		ing.Annotations = map[string]string{}
+	}
+
+	// Only backup if not backup stored previously.
+	if _, ok := ing.Annotations[ingressBackupAnnotation]; !ok {
+		ing.Annotations[ingressBackupAnnotation] = string(jsonBackend)
+	}
+
+	ing.Spec.Rules[0].HTTP.Paths[0].Backend = proxyBackend
+	err = p.kuberepo.UpdateIngress(ctx, ing)
+	if err != nil {
+		return fmt.Errorf("could not update ingress with proxy backend: %w", err)
+	}
+
+	return nil
+}
+
 func (p provisioner) Unprovision(ctx context.Context, settings proxy.OIDCProxySettings) error {
 	return nil
 }
 
-func getKubeNSAndNameFromID(id string) (ns, name string, err error) {
-	parts := strings.Split(id, "/")
-	if len(parts) != 2 {
-		return "", "", fmt.Errorf("could not get ns and name from ID")
-	}
-
-	ns = parts[0]
-	name = parts[1]
-	if ns == "" {
-		ns = "default"
-	}
-
-	return ns, name, nil
+func getResourceName(name string) string {
+	return fmt.Sprintf("%s-bilrost-proxy", name)
 }
