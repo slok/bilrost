@@ -5,27 +5,31 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/slok/bilrost/internal/log"
-	"github.com/slok/bilrost/internal/proxy"
-	"github.com/slok/bilrost/internal/proxy/oauth2proxy"
-	"github.com/slok/bilrost/internal/proxy/oauth2proxy/oauth2proxymock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	"github.com/slok/bilrost/internal/log"
+	"github.com/slok/bilrost/internal/proxy"
+	"github.com/slok/bilrost/internal/proxy/oauth2proxy"
+	"github.com/slok/bilrost/internal/proxy/oauth2proxy/oauth2proxymock"
 )
 
 func getBaseSettings() proxy.OIDCProxySettings {
 	return proxy.OIDCProxySettings{
-		URL:         "https://my-app.my-cluster.dev",
-		UpstreamURL: "http://my-app.my-ns.svc.cluster.local:8080",
-		IssuerURL:   "https://dex.my-cluster.dev",
-		AppID:       "my-ns/my-app",
-		AppSecret:   "my-secret",
-		Scopes:      []string{"openid", "email", "profile", "groups", "offline_access"},
+		URL:              "https://my-app.my-cluster.dev",
+		UpstreamURL:      "http://my-app.my-ns.svc.cluster.local:8080",
+		IssuerURL:        "https://dex.my-cluster.dev",
+		AppID:            "my-app-bilrost",
+		AppSecret:        "my-secret",
+		Scopes:           []string{"openid", "email", "profile", "groups", "offline_access"},
+		IngressNamespace: "my-ns",
+		IngressName:      "my-app",
 	}
 }
 
@@ -61,7 +65,7 @@ func getBaseDeployment() *appsv1.Deployment {
 							Image: "quay.io/oauth2-proxy/oauth2-proxy:v5.1.0",
 							Args: []string{
 								"--oidc-issuer-url=https://dex.my-cluster.dev",
-								"--client-id=my-ns/my-app",
+								"--client-id=my-app-bilrost",
 								"--client-secret=my-secret",
 								"--http-address=0.0.0.0:4180",
 								"--redirect-url=https://my-app.my-cluster.dev/oauth2/callback",
@@ -107,7 +111,37 @@ func getBaseService() *corev1.Service {
 			Ports: []corev1.ServicePort{
 				corev1.ServicePort{
 					Port:       80,
+					Name:       "http",
 					TargetPort: intstr.FromInt(4180),
+				},
+			},
+		},
+	}
+}
+
+func getBaseIngress() *networkingv1beta1.Ingress {
+	return &networkingv1beta1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "my-app",
+			Namespace:   "my-ns",
+			Labels:      map[string]string{"test": "1"},
+			Annotations: map[string]string{"test": "1"},
+		},
+		Spec: networkingv1beta1.IngressSpec{
+			Rules: []networkingv1beta1.IngressRule{
+				{
+					IngressRuleValue: networkingv1beta1.IngressRuleValue{
+						HTTP: &networkingv1beta1.HTTPIngressRuleValue{
+							Paths: []networkingv1beta1.HTTPIngressPath{
+								{
+									Backend: networkingv1beta1.IngressBackend{
+										ServiceName: "my-app",
+										ServicePort: intstr.FromInt(8080),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -120,7 +154,7 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 		mock     func(m *oauth2proxymock.KubernetesRepository)
 		expErr   bool
 	}{
-		"A correct proxy provisioning should provision a deployment and a service.": {
+		"A correct proxy provisioning should provision a deployment, a service, and swap the ingres.": {
 			settings: getBaseSettings,
 			mock: func(m *oauth2proxymock.KubernetesRepository) {
 				expDep := getBaseDeployment()
@@ -128,17 +162,59 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 
 				m.On("EnsureDeployment", mock.Anything, expDep).Once().Return(nil)
 				m.On("EnsureService", mock.Anything, expSvc).Once().Return(nil)
+
+				storedIngress := getBaseIngress()
+				m.On("GetIngress", mock.Anything, "my-ns", "my-app").Once().Return(storedIngress, nil)
+
+				expIngress := getBaseIngress()
+				expIngress.Annotations["auth.bilrost.slok.dev/oath2-proxy-backup"] = `{"serviceName":"my-app","servicePort":8080}`
+				expIngress.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1beta1.IngressBackend{
+					ServiceName: "my-app-bilrost-proxy",
+					ServicePort: intstr.FromString("http"),
+				}
+				m.On("UpdateIngress", mock.Anything, expIngress).Once().Return(nil)
 			},
 		},
 
-		"A wrong app ID without namespace should stop the process.": {
-			settings: func() proxy.OIDCProxySettings {
-				s := getBaseSettings()
-				s.AppID = "test"
-				return s
+		"If stored ingress already has been swapped, it shouldn't be updated.": {
+			settings: getBaseSettings,
+			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				expDep := getBaseDeployment()
+				expSvc := getBaseService()
+
+				m.On("EnsureDeployment", mock.Anything, expDep).Once().Return(nil)
+				m.On("EnsureService", mock.Anything, expSvc).Once().Return(nil)
+
+				storedIngress := getBaseIngress()
+				storedIngress.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1beta1.IngressBackend{
+					ServiceName: "my-app-bilrost-proxy",
+					ServicePort: intstr.FromString("http"),
+				}
+				m.On("GetIngress", mock.Anything, "my-ns", "my-app").Once().Return(storedIngress, nil)
 			},
-			mock:   func(m *oauth2proxymock.KubernetesRepository) {},
-			expErr: true,
+		},
+
+		"If ingress backup already stored then don't store backup.": {
+			settings: getBaseSettings,
+			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				expDep := getBaseDeployment()
+				expSvc := getBaseService()
+
+				m.On("EnsureDeployment", mock.Anything, expDep).Once().Return(nil)
+				m.On("EnsureService", mock.Anything, expSvc).Once().Return(nil)
+
+				storedIngress := getBaseIngress()
+				storedIngress.Annotations["auth.bilrost.slok.dev/oath2-proxy-backup"] = `backup already stored`
+				m.On("GetIngress", mock.Anything, "my-ns", "my-app").Once().Return(storedIngress, nil)
+
+				expIngress := getBaseIngress()
+				expIngress.Annotations["auth.bilrost.slok.dev/oath2-proxy-backup"] = `backup already stored`
+				expIngress.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1beta1.IngressBackend{
+					ServiceName: "my-app-bilrost-proxy",
+					ServicePort: intstr.FromString("http"),
+				}
+				m.On("UpdateIngress", mock.Anything, expIngress).Once().Return(nil)
+			},
 		},
 
 		"Failing setting up the deployment should stop the provision process.": {
@@ -154,6 +230,27 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 			mock: func(m *oauth2proxymock.KubernetesRepository) {
 				m.On("EnsureDeployment", mock.Anything, mock.Anything).Once().Return(nil)
 				m.On("EnsureService", mock.Anything, mock.Anything).Once().Return(fmt.Errorf("wanted error"))
+			},
+			expErr: true,
+		},
+
+		"Failing getting the original ingress should stop the provision process.": {
+			settings: getBaseSettings,
+			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				m.On("EnsureDeployment", mock.Anything, mock.Anything).Once().Return(nil)
+				m.On("EnsureService", mock.Anything, mock.Anything).Once().Return(nil)
+				m.On("GetIngress", mock.Anything, mock.Anything, mock.Anything).Once().Return(nil, fmt.Errorf("wanted error"))
+			},
+			expErr: true,
+		},
+
+		"Failing updating app ingress should stop the provision process.": {
+			settings: getBaseSettings,
+			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				m.On("EnsureDeployment", mock.Anything, mock.Anything).Once().Return(nil)
+				m.On("EnsureService", mock.Anything, mock.Anything).Once().Return(nil)
+				m.On("GetIngress", mock.Anything, mock.Anything, mock.Anything).Once().Return(getBaseIngress(), nil)
+				m.On("UpdateIngress", mock.Anything, mock.Anything).Once().Return(fmt.Errorf("wanted error"))
 			},
 			expErr: true,
 		},

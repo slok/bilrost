@@ -77,11 +77,13 @@ func TestSecureApp(t *testing.T) {
 
 				// The proxy should be provisioned.
 				expProxySettings := proxy.OIDCProxySettings{
-					URL:         "https://my.app.slok.dev",
-					UpstreamURL: "http://internal-app.my-ns.svc.cluster.local:8080",
-					IssuerURL:   "https://test-dex.dev",
-					AppID:       "test-ns/my-app",
-					AppSecret:   "TODO",
+					URL:              "https://my.app.slok.dev",
+					UpstreamURL:      "http://internal-app.my-ns.svc.cluster.local:8080",
+					IssuerURL:        "https://test-dex.dev",
+					AppID:            "test-ns/my-app",
+					AppSecret:        "TODO",
+					IngressName:      "my-app",
+					IngressNamespace: "test-ns",
 				}
 				m.oidcProxyProv.On("Provision", mock.Anything, expProxySettings).Once().Return(nil)
 			},

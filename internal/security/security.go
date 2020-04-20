@@ -126,19 +126,18 @@ func (s service) SecureApp(ctx context.Context, app model.App) error {
 	}
 	proxySettings := proxy.OIDCProxySettings{
 		URL: fmt.Sprintf("https://%s", app.Host),
-		// TODO(slok): Is alwasy http? https?
-		UpstreamURL: fmt.Sprintf("http://%s:%d", host, port),
-		IssuerURL:   abPublicURL,
-		AppID:       oa.ID,
-		AppSecret:   oa.Secret,
+		// TODO(slok): Is always http? https?
+		UpstreamURL:      fmt.Sprintf("http://%s:%d", host, port),
+		IssuerURL:        abPublicURL,
+		AppID:            oa.ID,
+		AppSecret:        oa.Secret,
+		IngressName:      app.Ingress.Name,
+		IngressNamespace: app.Ingress.Namespace,
 	}
 	err = s.proxyProvisioner.Provision(ctx, proxySettings)
 	if err != nil {
 		return fmt.Errorf("could not provision OIDC proxy: %w", err)
 	}
-
-	// Update ingress.
-	// TODO.
 
 	return nil
 }
