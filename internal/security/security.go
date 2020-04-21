@@ -180,7 +180,7 @@ func (s service) RollbackAppSecurity(ctx context.Context, app model.App) error {
 	}
 	err = s.proxyProvisioner.Unprovision(ctx, proxySettings)
 	if err != nil {
-		return fmt.Errorf("could not provision OIDC proxy: %w", err)
+		return fmt.Errorf("could not unprovision OIDC proxy: %w", err)
 	}
 
 	// Get the auth backend to unregister the app.

@@ -221,7 +221,6 @@ func (p provisioner) Unprovision(ctx context.Context, settings proxy.Unprovision
 
 func (p provisioner) restoreIngress(ctx context.Context, settings proxy.UnprovisionSettings) error {
 	var port intstr.IntOrString
-
 	if p, err := strconv.Atoi(settings.OriginalServicePortOrNamePort); err == nil {
 		port = intstr.FromInt(p)
 	} else {

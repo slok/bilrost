@@ -133,6 +133,8 @@ func (i ingressHandler) Handle(ctx context.Context, obj runtime.Object) error {
 			return fmt.Errorf("could not secure the application: %w", err)
 		}
 
+		// Mark the ingress as being handled so we can rollback although the user
+		// removes the annotation.
 		err = i.markIngress(ctx, ing.Namespace, ing.Name)
 		if err != nil {
 			return fmt.Errorf("could not mark the ingress as handled: %w", err)
@@ -149,6 +151,7 @@ func (i ingressHandler) Handle(ctx context.Context, obj runtime.Object) error {
 			return fmt.Errorf("could not rollback the ingress security: %w", err)
 		}
 
+		// Not ours anymore, remove the habdled mark.
 		err = i.unmarkIngress(ctx, ing.Namespace, ing.Name)
 		if err != nil {
 			return fmt.Errorf("could not mark the ingress as handled: %w", err)
