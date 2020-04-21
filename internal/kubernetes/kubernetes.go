@@ -83,6 +83,8 @@ func (s Service) EnsureDeployment(_ context.Context, dep *appsv1.Deployment) err
 			return fmt.Errorf("could not create deployment: %w", err)
 		}
 		logger.Debugf("deployment has been created")
+
+		return nil
 	}
 
 	// Force overwrite.
@@ -93,6 +95,19 @@ func (s Service) EnsureDeployment(_ context.Context, dep *appsv1.Deployment) err
 	}
 	logger.Debugf("deployment has been updated")
 
+	return nil
+}
+
+// DeleteDeployment satisfies oauth2proxy.KubernetesRepository interface.
+func (s Service) DeleteDeployment(_ context.Context, ns, name string) error {
+	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
+
+	err := s.coreCli.AppsV1().Deployments(ns).Delete(name, &metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("could not delete deployment: %w", err)
+	}
+
+	logger.Debugf("deployment has been deleted")
 	return nil
 }
 
@@ -110,6 +125,8 @@ func (s Service) EnsureService(_ context.Context, svc *corev1.Service) error {
 			return fmt.Errorf("could not create service: %w", err)
 		}
 		logger.Debugf("service has been created")
+
+		return nil
 	}
 
 	// Force overwrite.
@@ -121,6 +138,19 @@ func (s Service) EnsureService(_ context.Context, svc *corev1.Service) error {
 	}
 	logger.Debugf("service has been updated")
 
+	return nil
+}
+
+// DeleteService satisfies oauth2proxy.KubernetesRepository interface.
+func (s Service) DeleteService(_ context.Context, ns, name string) error {
+	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
+
+	err := s.coreCli.CoreV1().Services(ns).Delete(name, &metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("could not delete service: %w", err)
+	}
+
+	logger.Debugf("service has been deleted")
 	return nil
 }
 

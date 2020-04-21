@@ -3,6 +3,7 @@ package oauth2proxy
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -23,7 +24,9 @@ var (
 // KubernetesRepository is the proxy kubernetes service used to communicate with Kubernetes.
 type KubernetesRepository interface {
 	EnsureDeployment(ctx context.Context, dep *appsv1.Deployment) error
+	DeleteDeployment(ctx context.Context, ns, name string) error
 	EnsureService(ctx context.Context, svc *corev1.Service) error
+	DeleteService(ctx context.Context, ns, name string) error
 	GetIngress(ctx context.Context, ns, name string) (*networkingv1beta1.Ingress, error)
 	UpdateIngress(ctx context.Context, ingress *networkingv1beta1.Ingress) error
 }
@@ -60,8 +63,8 @@ func (p provisioner) Provision(ctx context.Context, settings proxy.OIDCProxySett
 		return fmt.Errorf("could not provision service on Kubernetes: %w", err)
 	}
 
-	// Enable ingress.
-	err = p.updateIngressAndBackup(ctx, settings)
+	// Point ingress to the secure proxy.
+	err = p.setIngressToProxy(ctx, settings)
 	if err != nil {
 		return fmt.Errorf("could not update ingress in on Kubernetes to eanble oauth2 proxy service: %w", err)
 	}
@@ -98,7 +101,7 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
-						corev1.Container{
+						{
 							Name:  "app",
 							Image: "quay.io/oauth2-proxy/oauth2-proxy:v5.1.0",
 							Args: []string{
@@ -117,7 +120,7 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 								`--email-domain=*`,
 							},
 							Ports: []corev1.ContainerPort{
-								corev1.ContainerPort{
+								{
 									ContainerPort: proxyInternalPort,
 									Name:          "http",
 									Protocol:      "TCP",
@@ -161,7 +164,7 @@ func (p provisioner) provisionDeploymentService(ctx context.Context, dep *appsv1
 			Type:     "ClusterIP",
 			Selector: dep.Labels,
 			Ports: []corev1.ServicePort{
-				corev1.ServicePort{
+				{
 					Port:       proxySvcPort,
 					Name:       proxySvcName,
 					TargetPort: intstr.FromInt(int(dep.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort)),
@@ -178,8 +181,67 @@ func (p provisioner) provisionDeploymentService(ctx context.Context, dep *appsv1
 	return nil
 }
 
-func (p provisioner) updateIngressAndBackup(ctx context.Context, settings proxy.OIDCProxySettings) error {
-	ing, err := p.kuberepo.GetIngress(ctx, settings.IngressNamespace, settings.IngressName)
+func (p provisioner) setIngressToProxy(ctx context.Context, settings proxy.OIDCProxySettings) error {
+	proxyBackend := networkingv1beta1.IngressBackend{
+		ServiceName: getResourceName(settings.IngressName),
+		ServicePort: intstr.FromString(proxySvcName),
+	}
+
+	err := p.updateIngressBackend(ctx, settings.IngressNamespace, settings.IngressName, proxyBackend)
+	if err != nil {
+		return fmt.Errorf("could not point ingress to secured proxy: %w", err)
+	}
+
+	return nil
+}
+
+func (p provisioner) Unprovision(ctx context.Context, settings proxy.UnprovisionSettings) error {
+	name := getResourceName(settings.IngressName)
+
+	// Update ingress with original service.
+	// Is important to make this as first step becase we don't want to be
+	// unavailable if we delete the proxy.
+	err := p.restoreIngress(ctx, settings)
+	if err != nil {
+		return fmt.Errorf("could not restore ingress previous value: %w", err)
+	}
+
+	// Delete Proxy.
+	err = p.kuberepo.DeleteService(ctx, settings.IngressNamespace, name)
+	if err != nil {
+		return fmt.Errorf("could not unprovision proxy service: %w", err)
+	}
+	err = p.kuberepo.DeleteDeployment(ctx, settings.IngressNamespace, name)
+	if err != nil {
+		return fmt.Errorf("could not unprovision proxy deployment: %w", err)
+	}
+
+	return nil
+}
+
+func (p provisioner) restoreIngress(ctx context.Context, settings proxy.UnprovisionSettings) error {
+	var port intstr.IntOrString
+	if p, err := strconv.Atoi(settings.OriginalServicePortOrNamePort); err == nil {
+		port = intstr.FromInt(p)
+	} else {
+		port = intstr.FromString(settings.OriginalServicePortOrNamePort)
+	}
+
+	origBackend := networkingv1beta1.IngressBackend{
+		ServiceName: settings.OriginalServiceName,
+		ServicePort: port,
+	}
+
+	err := p.updateIngressBackend(ctx, settings.IngressNamespace, settings.IngressName, origBackend)
+	if err != nil {
+		return fmt.Errorf("could not restore original ingress backend: %w", err)
+	}
+
+	return nil
+}
+
+func (p provisioner) updateIngressBackend(ctx context.Context, ns, name string, newBackend networkingv1beta1.IngressBackend) error {
+	ing, err := p.kuberepo.GetIngress(ctx, ns, name)
 	if err != nil {
 		return err
 	}
@@ -195,26 +257,18 @@ func (p provisioner) updateIngressAndBackup(ctx context.Context, settings proxy.
 	}
 
 	// Do we need to update the ingress?
-	proxyBackend := networkingv1beta1.IngressBackend{
-		ServiceName: getResourceName(settings.IngressName),
-		ServicePort: intstr.FromString(proxySvcName),
-	}
 	currentBackend := ing.Spec.Rules[0].HTTP.Paths[0].Backend
-	if currentBackend == proxyBackend {
-		p.logger.Debugf("ingress already pointing to %s:%s service, ignoring update", proxyBackend.ServiceName, proxyBackend.ServicePort)
+	if currentBackend == newBackend {
+		p.logger.Debugf("ingress already pointing to %s:%s service, ignoring update", newBackend.ServiceName, newBackend.ServicePort)
 		return nil
 	}
 
-	ing.Spec.Rules[0].HTTP.Paths[0].Backend = proxyBackend
+	ing.Spec.Rules[0].HTTP.Paths[0].Backend = newBackend
 	err = p.kuberepo.UpdateIngress(ctx, ing)
 	if err != nil {
-		return fmt.Errorf("could not update ingress with proxy backend: %w", err)
+		return fmt.Errorf("could not update ingress with backend: %w", err)
 	}
 
-	return nil
-}
-
-func (p provisioner) Unprovision(ctx context.Context, settings proxy.OIDCProxySettings) error {
 	return nil
 }
 

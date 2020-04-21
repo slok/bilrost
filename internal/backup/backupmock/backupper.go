@@ -48,3 +48,26 @@ func (_m *Backupper) DeleteBackup(ctx context.Context, app model.App) error {
 
 	return r0
 }
+
+// GetBackup provides a mock function with given fields: ctx, app
+func (_m *Backupper) GetBackup(ctx context.Context, app model.App) (*backup.Data, error) {
+	ret := _m.Called(ctx, app)
+
+	var r0 *backup.Data
+	if rf, ok := ret.Get(0).(func(context.Context, model.App) *backup.Data); ok {
+		r0 = rf(ctx, app)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*backup.Data)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, model.App) error); ok {
+		r1 = rf(ctx, app)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
