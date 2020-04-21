@@ -16,6 +16,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	authbackendfactory "github.com/slok/bilrost/internal/authbackend/factory"
+	"github.com/slok/bilrost/internal/backup"
 	"github.com/slok/bilrost/internal/controller"
 	"github.com/slok/bilrost/internal/kubernetes"
 	kubernetesclient "github.com/slok/bilrost/internal/kubernetes/client"
@@ -60,7 +61,9 @@ func Run() error {
 	kubeSvc := kubernetes.NewService(kCoreCli, kBilrostCli, logger)
 	authBackFactory := authbackendfactory.NewFactory(logger)
 	proxyProvisioner := oauth2proxy.NewOIDCProvisioner(kubeSvc, logger)
+	backupSvc := backup.NewIngressBackupper(kubeSvc, logger)
 	secSvc, err := security.NewService(security.ServiceConfig{
+		Backupper:              backupSvc,
 		ServiceTranslator:      kubeSvc,
 		OIDCProxyProvisioner:   proxyProvisioner,
 		AuthBackendRepoFactory: authBackFactory,

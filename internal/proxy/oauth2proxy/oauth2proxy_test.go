@@ -167,7 +167,6 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 				m.On("GetIngress", mock.Anything, "my-ns", "my-app").Once().Return(storedIngress, nil)
 
 				expIngress := getBaseIngress()
-				expIngress.Annotations["auth.bilrost.slok.dev/oath2-proxy-backup"] = `{"serviceName":"my-app","servicePort":8080}`
 				expIngress.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1beta1.IngressBackend{
 					ServiceName: "my-app-bilrost-proxy",
 					ServicePort: intstr.FromString("http"),
@@ -191,29 +190,6 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 					ServicePort: intstr.FromString("http"),
 				}
 				m.On("GetIngress", mock.Anything, "my-ns", "my-app").Once().Return(storedIngress, nil)
-			},
-		},
-
-		"If ingress backup already stored then don't store backup.": {
-			settings: getBaseSettings,
-			mock: func(m *oauth2proxymock.KubernetesRepository) {
-				expDep := getBaseDeployment()
-				expSvc := getBaseService()
-
-				m.On("EnsureDeployment", mock.Anything, expDep).Once().Return(nil)
-				m.On("EnsureService", mock.Anything, expSvc).Once().Return(nil)
-
-				storedIngress := getBaseIngress()
-				storedIngress.Annotations["auth.bilrost.slok.dev/oath2-proxy-backup"] = `backup already stored`
-				m.On("GetIngress", mock.Anything, "my-ns", "my-app").Once().Return(storedIngress, nil)
-
-				expIngress := getBaseIngress()
-				expIngress.Annotations["auth.bilrost.slok.dev/oath2-proxy-backup"] = `backup already stored`
-				expIngress.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1beta1.IngressBackend{
-					ServiceName: "my-app-bilrost-proxy",
-					ServicePort: intstr.FromString("http"),
-				}
-				m.On("UpdateIngress", mock.Anything, expIngress).Once().Return(nil)
 			},
 		},
 

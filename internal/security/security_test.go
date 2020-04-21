@@ -11,6 +11,8 @@ import (
 
 	"github.com/slok/bilrost/internal/authbackend"
 	"github.com/slok/bilrost/internal/authbackend/authbackendmock"
+	"github.com/slok/bilrost/internal/backup"
+	"github.com/slok/bilrost/internal/backup/backupmock"
 	"github.com/slok/bilrost/internal/model"
 	"github.com/slok/bilrost/internal/proxy"
 	"github.com/slok/bilrost/internal/proxy/proxymock"
@@ -20,6 +22,7 @@ import (
 
 func TestSecureApp(t *testing.T) {
 	type testMocks struct {
+		backupper     *backupmock.Backupper
 		svcTranslator *securitymock.KubeServiceTranslator
 		abRepo        *securitymock.AuthBackendRepository
 		abAppReg      *authbackendmock.AppRegisterer
@@ -32,7 +35,7 @@ func TestSecureApp(t *testing.T) {
 		mock   func(m testMocks)
 		expErr bool
 	}{
-		"A correct secured app with Dex backend should make all the steps correctly.": {
+		"A new unsecured app with Dex backend should make all the steps correctly to be secured.": {
 			app: model.App{
 				ID:            "test-ns/my-app",
 				AuthBackendID: "test-ns-dex-backend",
@@ -66,6 +69,81 @@ func TestSecureApp(t *testing.T) {
 					Secret:      "TODO",
 				}
 				m.abAppReg.On("RegisterApp", mock.Anything, expOIDCApp).Once().Return(nil)
+
+				// The original information should be backup up.
+				expData := backup.Data{
+					ServiceName:           "internal-app",
+					ServicePortOrNamePort: "http",
+				}
+				m.backupper.On("BackupOrGet", mock.Anything, mock.Anything, expData).Once().Return(nil, nil)
+
+				// The service should be translated to URL.
+				expSvc := model.KubernetesService{
+					Name:           "internal-app",
+					Namespace:      "test-ns",
+					PortOrPortName: "http",
+				}
+				m.svcTranslator.On("GetServiceHostAndPort", mock.Anything, expSvc).Once().Return("internal-app.my-ns.svc.cluster.local", 8080, nil)
+
+				// The proxy should be provisioned.
+				expProxySettings := proxy.OIDCProxySettings{
+					URL:              "https://my.app.slok.dev",
+					UpstreamURL:      "http://internal-app.my-ns.svc.cluster.local:8080",
+					IssuerURL:        "https://test-dex.dev",
+					AppID:            "test-ns/my-app",
+					AppSecret:        "TODO",
+					IngressName:      "my-app",
+					IngressNamespace: "test-ns",
+				}
+				m.oidcProxyProv.On("Provision", mock.Anything, expProxySettings).Once().Return(nil)
+			},
+		},
+
+		"An already secured app with Dex backend should make all the steps correctly to maintain secured.": {
+			app: model.App{
+				ID:            "test-ns/my-app",
+				AuthBackendID: "test-ns-dex-backend",
+				Host:          "my.app.slok.dev",
+				Ingress: model.KubernetesIngress{
+					Name:      "my-app",
+					Namespace: "test-ns",
+					Upstream: model.KubernetesService{
+						Name:           "internal-app-already-secured",
+						Namespace:      "test-ns",
+						PortOrPortName: "80",
+					},
+				},
+			},
+			mock: func(m testMocks) {
+				// Get the backend information.
+				ab := &model.AuthBackend{
+					ID: "test-dex",
+					Dex: &model.AuthBackendDex{
+						APIURL:    "internal.cluster.url:81",
+						PublicURL: "https://test-dex.dev",
+					},
+				}
+				m.abRepo.On("GetAuthBackend", mock.Anything, "test-ns-dex-backend").Once().Return(ab, nil)
+
+				// The app should be registered.
+				expOIDCApp := authbackend.OIDCApp{
+					ID:          "test-ns/my-app",
+					Name:        "test-ns/my-app",
+					CallBackURL: "https://my.app.slok.dev/oauth2/callback",
+					Secret:      "TODO",
+				}
+				m.abAppReg.On("RegisterApp", mock.Anything, expOIDCApp).Once().Return(nil)
+
+				// The original information is already there, we return the original upstream.
+				expData := backup.Data{
+					ServiceName:           "internal-app-already-secured",
+					ServicePortOrNamePort: "80",
+				}
+				storedData := backup.Data{
+					ServiceName:           "internal-app",
+					ServicePortOrNamePort: "http",
+				}
+				m.backupper.On("BackupOrGet", mock.Anything, mock.Anything, expData).Once().Return(&storedData, nil)
 
 				// The service should be translated to URL.
 				expSvc := model.KubernetesService{
@@ -104,10 +182,20 @@ func TestSecureApp(t *testing.T) {
 			expErr: true,
 		},
 
+		"Failing while backuping the data should stop the process with failure.": {
+			mock: func(m testMocks) {
+				m.abRepo.On("GetAuthBackend", mock.Anything, mock.Anything).Once().Return(&model.AuthBackend{}, nil)
+				m.abAppReg.On("RegisterApp", mock.Anything, mock.Anything).Once().Return(nil)
+				m.backupper.On("BackupOrGet", mock.Anything, mock.Anything, mock.Anything).Once().Return(nil, fmt.Errorf("wanted error"))
+			},
+			expErr: true,
+		},
+
 		"Failing while translating the service to a URL should stop the process with failure.": {
 			mock: func(m testMocks) {
 				m.abRepo.On("GetAuthBackend", mock.Anything, mock.Anything).Once().Return(&model.AuthBackend{}, nil)
 				m.abAppReg.On("RegisterApp", mock.Anything, mock.Anything).Once().Return(nil)
+				m.backupper.On("BackupOrGet", mock.Anything, mock.Anything, mock.Anything).Once().Return(nil, nil)
 				m.svcTranslator.On("GetServiceHostAndPort", mock.Anything, mock.Anything).Once().Return("", 0, fmt.Errorf("wanted error"))
 			},
 			expErr: true,
@@ -117,6 +205,7 @@ func TestSecureApp(t *testing.T) {
 			mock: func(m testMocks) {
 				m.abRepo.On("GetAuthBackend", mock.Anything, mock.Anything).Once().Return(&model.AuthBackend{}, nil)
 				m.abAppReg.On("RegisterApp", mock.Anything, mock.Anything).Once().Return(nil)
+				m.backupper.On("BackupOrGet", mock.Anything, mock.Anything, mock.Anything).Once().Return(nil, nil)
 				m.svcTranslator.On("GetServiceHostAndPort", mock.Anything, mock.Anything).Once().Return("", 0, nil)
 				m.oidcProxyProv.On("Provision", mock.Anything, mock.Anything).Once().Return(fmt.Errorf("wanted error"))
 			},
@@ -131,6 +220,7 @@ func TestSecureApp(t *testing.T) {
 
 			// Mocks.
 			m := testMocks{
+				backupper:     &backupmock.Backupper{},
 				svcTranslator: &securitymock.KubeServiceTranslator{},
 				abRepo:        &securitymock.AuthBackendRepository{},
 				abAppReg:      &authbackendmock.AppRegisterer{},
@@ -142,6 +232,7 @@ func TestSecureApp(t *testing.T) {
 
 			// Execute.
 			cfg := security.ServiceConfig{
+				Backupper:              m.backupper,
 				ServiceTranslator:      m.svcTranslator,
 				AuthBackendRepo:        m.abRepo,
 				AuthBackendRepoFactory: m.abAppRegFact,
@@ -160,6 +251,8 @@ func TestSecureApp(t *testing.T) {
 				m.abAppReg.AssertExpectations(t)
 				m.abAppRegFact.AssertExpectations(t)
 				m.oidcProxyProv.AssertExpectations(t)
+				m.svcTranslator.AssertExpectations(t)
+				m.backupper.AssertExpectations(t)
 			}
 		})
 	}
