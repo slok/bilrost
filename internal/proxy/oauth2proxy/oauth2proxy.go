@@ -2,7 +2,6 @@ package oauth2proxy
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -18,8 +17,7 @@ import (
 )
 
 var (
-	defaultScopes           = []string{"openid", "email", "profile", "groups", "offline_access"}
-	ingressBackupAnnotation = "auth.bilrost.slok.dev/oath2-proxy-backup"
+	defaultScopes = []string{"openid", "email", "profile", "groups", "offline_access"}
 )
 
 // KubernetesRepository is the proxy kubernetes service used to communicate with Kubernetes.
@@ -205,22 +203,6 @@ func (p provisioner) updateIngressAndBackup(ctx context.Context, settings proxy.
 	if currentBackend == proxyBackend {
 		p.logger.Debugf("ingress already pointing to %s:%s service, ignoring update", proxyBackend.ServiceName, proxyBackend.ServicePort)
 		return nil
-	}
-
-	// Backup original backend.
-	jsonBackend, err := json.Marshal(currentBackend)
-	if err != nil {
-		return fmt.Errorf("could not marshall original ingress backend for backup: %w", err)
-	}
-
-	// Swap ingress to proxy.
-	if ing.Annotations == nil {
-		ing.Annotations = map[string]string{}
-	}
-
-	// Only backup if not backup stored previously.
-	if _, ok := ing.Annotations[ingressBackupAnnotation]; !ok {
-		ing.Annotations[ingressBackupAnnotation] = string(jsonBackend)
 	}
 
 	ing.Spec.Rules[0].HTTP.Paths[0].Backend = proxyBackend

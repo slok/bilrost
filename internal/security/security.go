@@ -6,6 +6,7 @@ import (
 
 	"github.com/slok/bilrost/internal/authbackend"
 	authbackendfactory "github.com/slok/bilrost/internal/authbackend/factory"
+	"github.com/slok/bilrost/internal/backup"
 	"github.com/slok/bilrost/internal/log"
 	"github.com/slok/bilrost/internal/model"
 	"github.com/slok/bilrost/internal/proxy"
@@ -33,6 +34,7 @@ type Service interface {
 }
 
 type service struct {
+	backupper        backup.Backupper
 	proxyProvisioner proxy.OIDCProvisioner
 	abRepo           AuthBackendRepository
 	abRegFactory     authbackend.AppRegistererFactory
@@ -42,6 +44,7 @@ type service struct {
 
 // ServiceConfig is the service configuration.
 type ServiceConfig struct {
+	Backupper              backup.Backupper
 	ServiceTranslator      KubeServiceTranslator
 	OIDCProxyProvisioner   proxy.OIDCProvisioner
 	AuthBackendRepo        AuthBackendRepository
@@ -71,6 +74,10 @@ func (c *ServiceConfig) defaults() error {
 		return fmt.Errorf("a Kubernetes service translator is required")
 	}
 
+	if c.Backupper == nil {
+		return fmt.Errorf("a backup service is required")
+	}
+
 	return nil
 }
 
@@ -82,6 +89,7 @@ func NewService(cfg ServiceConfig) (Service, error) {
 	}
 
 	return service{
+		backupper:        cfg.Backupper,
 		svcTranslator:    cfg.ServiceTranslator,
 		proxyProvisioner: cfg.OIDCProxyProvisioner,
 		abRepo:           cfg.AuthBackendRepo,
@@ -96,7 +104,7 @@ func (s service) SecureApp(ctx context.Context, app model.App) error {
 		return fmt.Errorf("could not retrieve backend information: %w", err)
 	}
 
-	// Get the backend to register the app and register.
+	// Get the auth backend to register the app and register.
 	abReg, err := s.abRegFactory.GetAppRegisterer(*ab)
 	if err != nil {
 		return fmt.Errorf("could not get app backend to register the app")
@@ -110,6 +118,20 @@ func (s service) SecureApp(ctx context.Context, app model.App) error {
 	err = abReg.RegisterApp(ctx, oa)
 	if err != nil {
 		return fmt.Errorf("could not register oauth application on backend: %w", err)
+	}
+
+	// Backup original Ingress service data or load from a previous backup if already there.
+	bkData := &backup.Data{
+		ServiceName:           app.Ingress.Upstream.Name,
+		ServicePortOrNamePort: app.Ingress.Upstream.PortOrPortName,
+	}
+	bkData, err = s.backupper.BackupOrGet(ctx, app, *bkData)
+	if err != nil {
+		return fmt.Errorf("could not backup or get backup data: %w", err)
+	}
+	if bkData != nil {
+		app.Ingress.Upstream.Name = bkData.ServiceName
+		app.Ingress.Upstream.PortOrPortName = bkData.ServicePortOrNamePort
 	}
 
 	// Get Upstream URL.
