@@ -129,6 +129,7 @@ func Run() error {
 		logger.Infof("ingress mode has been enabled")
 
 		handler, err := controller.NewIngressHandler(controller.IngressHandlerConfig{
+			KubeSvc:     kubeSvc,
 			SecuritySvc: secSvc,
 			Logger:      logger,
 		})
@@ -141,7 +142,7 @@ func Run() error {
 			Retriever:            controller.NewIngressRetriever(cmdCfg.Namespace, kubeSvc),
 			Logger:               kooperLogger,
 			Name:                 "ingress-controller",
-			ConcurrentWorkers:    3,
+			ConcurrentWorkers:    cmdCfg.Workers,
 			ProcessingJobRetries: 2,
 		})
 		if err != nil {

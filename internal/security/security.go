@@ -122,6 +122,7 @@ func (s service) SecureApp(ctx context.Context, app model.App) error {
 
 	// Backup original Ingress service data or load from a previous backup if already there.
 	bkData := &backup.Data{
+		AuthBackendID:         app.AuthBackendID,
 		ServiceName:           app.Ingress.Upstream.Name,
 		ServicePortOrNamePort: app.Ingress.Upstream.PortOrPortName,
 	}
@@ -165,5 +166,42 @@ func (s service) SecureApp(ctx context.Context, app model.App) error {
 }
 
 func (s service) RollbackAppSecurity(ctx context.Context, app model.App) error {
-	return fmt.Errorf("not implemented")
+	bkData, err := s.backupper.GetBackup(ctx, app)
+	if err != nil {
+		return fmt.Errorf("could not get backup data: %w", err)
+	}
+
+	// Uprovision proxy.
+	proxySettings := proxy.UnprovisionSettings{
+		IngressName:                   app.Ingress.Name,
+		IngressNamespace:              app.Ingress.Namespace,
+		OriginalServiceName:           bkData.ServiceName,
+		OriginalServicePortOrNamePort: bkData.ServicePortOrNamePort,
+	}
+	err = s.proxyProvisioner.Unprovision(ctx, proxySettings)
+	if err != nil {
+		return fmt.Errorf("could not provision OIDC proxy: %w", err)
+	}
+
+	// Get the auth backend to unregister the app.
+	ab, err := s.abRepo.GetAuthBackend(ctx, bkData.AuthBackendID)
+	if err != nil {
+		return fmt.Errorf("could not retrieve backend information: %w", err)
+	}
+	abReg, err := s.abRegFactory.GetAppRegisterer(*ab)
+	if err != nil {
+		return fmt.Errorf("could not get app backend to register the app")
+	}
+	err = abReg.UnregisterApp(ctx, app.ID)
+	if err != nil {
+		return fmt.Errorf("could not unregister oauth application on backend: %w", err)
+	}
+
+	// Delete backup.
+	err = s.backupper.DeleteBackup(ctx, app)
+	if err != nil {
+		return fmt.Errorf("could not delete backup: %w", err)
+	}
+
+	return nil
 }

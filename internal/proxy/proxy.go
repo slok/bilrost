@@ -24,12 +24,21 @@ type OIDCProxySettings struct {
 	IngressNamespace string
 }
 
+// UnprovisionSettings are the settings that the proxy service needs to restore
+// to the previous state.
+type UnprovisionSettings struct {
+	IngressName                   string
+	IngressNamespace              string
+	OriginalServiceName           string
+	OriginalServicePortOrNamePort string
+}
+
 // OIDCProvisioner knows how to provision an OIDC proxy to be able
 // to connect the proxy with the app as upstream and the
 // auth backend as the authentication service.
 type OIDCProvisioner interface {
 	Provision(ctx context.Context, settings OIDCProxySettings) error
-	Unprovision(ctx context.Context, settings OIDCProxySettings) error
+	Unprovision(ctx context.Context, settings UnprovisionSettings) error
 }
 
 //go:generate mockery -case underscore -output proxymock -outpkg proxymock -name OIDCProvisioner

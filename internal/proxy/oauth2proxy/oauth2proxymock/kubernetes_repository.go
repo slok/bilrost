@@ -14,6 +14,34 @@ type KubernetesRepository struct {
 	mock.Mock
 }
 
+// DeleteDeployment provides a mock function with given fields: ctx, ns, name
+func (_m *KubernetesRepository) DeleteDeployment(ctx context.Context, ns string, name string) error {
+	ret := _m.Called(ctx, ns, name)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, ns, name)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// DeleteService provides a mock function with given fields: ctx, ns, name
+func (_m *KubernetesRepository) DeleteService(ctx context.Context, ns string, name string) error {
+	ret := _m.Called(ctx, ns, name)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, ns, name)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // EnsureDeployment provides a mock function with given fields: ctx, dep
 func (_m *KubernetesRepository) EnsureDeployment(ctx context.Context, dep *v1.Deployment) error {
 	ret := _m.Called(ctx, dep)

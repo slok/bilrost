@@ -16,11 +16,18 @@ import (
 	"github.com/slok/bilrost/internal/security"
 )
 
+const (
+	backendAnnotation = "auth.bilrost.slok.dev/backend"
+	handledAnnotation = "auth.bilrost.slok.dev/handled"
+)
+
 // IngressControllerKubeService is the service to manage k8s resources by the ingress
 // controller.
 type IngressControllerKubeService interface {
 	ListIngresses(ctx context.Context, ns string, labelSelector map[string]string) (*networkingv1beta1.IngressList, error)
 	WatchIngresses(ctx context.Context, ns string, labelSelector map[string]string) (watch.Interface, error)
+	GetIngress(ctx context.Context, ns, name string) (*networkingv1beta1.Ingress, error)
+	UpdateIngress(ctx context.Context, ingress *networkingv1beta1.Ingress) error
 }
 
 // NewIngressRetriever returns the retriever for the ingress controller.
@@ -37,14 +44,13 @@ func NewIngressRetriever(ns string, kubeSvc IngressControllerKubeService) contro
 
 // IngressHandlerConfig is the configuration of the ingress handler.
 type IngressHandlerConfig struct {
-	SecuritySvc              security.Service
-	IngressBackendAnnotation string
-	Logger                   log.Logger
+	KubeSvc     IngressControllerKubeService
+	SecuritySvc security.Service
+	Logger      log.Logger
 }
 
 type ingressHandler struct {
-	annotation string
-
+	kubeSvc     IngressControllerKubeService
 	securitySvc security.Service
 	logger      log.Logger
 }
@@ -55,8 +61,8 @@ func (c *IngressHandlerConfig) defaults() error {
 	}
 	c.Logger = c.Logger.WithKV(log.KV{"service": "controller.IngressHandler"})
 
-	if c.IngressBackendAnnotation == "" {
-		c.IngressBackendAnnotation = "auth.bilrost.slok.dev/backend"
+	if c.KubeSvc == nil {
+		return fmt.Errorf("kubernetes service is required")
 	}
 
 	if c.SecuritySvc == nil {
@@ -74,7 +80,7 @@ func NewIngressHandler(cfg IngressHandlerConfig) (controller.Handler, error) {
 	}
 
 	return ingressHandler{
-		annotation:  cfg.IngressBackendAnnotation,
+		kubeSvc:     cfg.KubeSvc,
 		securitySvc: cfg.SecuritySvc,
 		logger:      cfg.Logger,
 	}, nil
@@ -89,14 +95,6 @@ func (i ingressHandler) Handle(ctx context.Context, obj runtime.Object) error {
 
 	logger := i.logger.WithKV(log.KV{"obj-ns": ing.Namespace, "obj-id": ing.Name})
 
-	backendID, ok := ing.Annotations[i.annotation]
-	if !ok {
-		logger.Debugf("ignoring ingress...")
-		return nil
-	}
-
-	logger.Infof("handling ingress...")
-
 	rulesLen := len(ing.Spec.Rules)
 	if rulesLen != 1 {
 		return fmt.Errorf("required rules on ingress is 1, got %d", rulesLen)
@@ -106,6 +104,9 @@ func (i ingressHandler) Handle(ctx context.Context, obj runtime.Object) error {
 	if pathsLen != 1 {
 		return fmt.Errorf("required paths on ingress is 1, got %d", pathsLen)
 	}
+
+	backendID, hasBackend := ing.Annotations[backendAnnotation]
+	_, prevHandled := ing.Annotations[handledAnnotation]
 
 	app := model.App{
 		ID:            fmt.Sprintf("%s/%s", ing.Namespace, ing.Name),
@@ -121,9 +122,81 @@ func (i ingressHandler) Handle(ctx context.Context, obj runtime.Object) error {
 			},
 		},
 	}
-	err := i.securitySvc.SecureApp(ctx, app)
+
+	// Select the correct action for the ingress.
+	switch {
+	// If we have a backend, then we need to trigger securing process.
+	case hasBackend && backendID != "":
+		logger.Infof("start securing ingress...")
+		err := i.securitySvc.SecureApp(ctx, app)
+		if err != nil {
+			return fmt.Errorf("could not secure the application: %w", err)
+		}
+
+		err = i.markIngress(ctx, ing.Namespace, ing.Name)
+		if err != nil {
+			return fmt.Errorf("could not mark the ingress as handled: %w", err)
+		}
+
+		return nil
+
+	// If we don't have backend but we have the ingress marked means that we
+	// need to trigger a clean up process.
+	case (!hasBackend || backendID == "") && prevHandled:
+		logger.Infof("start rollbacking ingress security...")
+		err := i.securitySvc.RollbackAppSecurity(ctx, app)
+		if err != nil {
+			return fmt.Errorf("could not rollback the ingress security: %w", err)
+		}
+
+		err = i.unmarkIngress(ctx, ing.Namespace, ing.Name)
+		if err != nil {
+			return fmt.Errorf("could not mark the ingress as handled: %w", err)
+		}
+
+		return nil
+	}
+
+	logger.Debugf("ignoring ingress...")
+
+	return nil
+}
+
+func (i ingressHandler) markIngress(ctx context.Context, ns, name string) error {
+	storedIng, err := i.kubeSvc.GetIngress(ctx, ns, name)
 	if err != nil {
-		return fmt.Errorf("could not secure the application: %w", err)
+		return fmt.Errorf("could not get ingress: %w", err)
+	}
+
+	// If already marked, skip update.
+	if _, ok := storedIng.Annotations[handledAnnotation]; ok {
+		return nil
+	}
+
+	storedIng.Annotations[handledAnnotation] = "true"
+	err = i.kubeSvc.UpdateIngress(ctx, storedIng)
+	if err != nil {
+		return fmt.Errorf("could not update ingress: %w", err)
+	}
+
+	return nil
+}
+
+func (i ingressHandler) unmarkIngress(ctx context.Context, ns, name string) error {
+	storedIng, err := i.kubeSvc.GetIngress(ctx, ns, name)
+	if err != nil {
+		return fmt.Errorf("could not get ingress: %w", err)
+	}
+
+	// If not marked, skip update.
+	if _, ok := storedIng.Annotations[handledAnnotation]; !ok {
+		return nil
+	}
+
+	delete(storedIng.Annotations, handledAnnotation)
+	err = i.kubeSvc.UpdateIngress(ctx, storedIng)
+	if err != nil {
+		return fmt.Errorf("could not update ingress: %w", err)
 	}
 
 	return nil

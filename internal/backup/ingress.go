@@ -74,6 +74,30 @@ func (i ingressBackupper) BackupOrGet(ctx context.Context, app model.App, data D
 	return &data, nil
 }
 
+func (i ingressBackupper) GetBackup(ctx context.Context, app model.App) (*Data, error) {
+	ing, err := i.kuberepo.GetIngress(ctx, app.Ingress.Namespace, app.Ingress.Name)
+	if err != nil {
+		return nil, fmt.Errorf("could not get ingress for backup: %w", err)
+	}
+
+	if ing.Annotations == nil {
+		return nil, fmt.Errorf("backup not present")
+	}
+
+	storedData, ok := ing.Annotations[ingressBackupAnnotation]
+	if !ok {
+		return nil, fmt.Errorf("backup not present")
+	}
+
+	data := &Data{}
+	err = json.Unmarshal([]byte(storedData), data)
+	if err != nil {
+		return nil, fmt.Errorf("could not unmarshall from JSON stored backup: %w", err)
+	}
+
+	return data, nil
+}
+
 func (i ingressBackupper) DeleteBackup(ctx context.Context, app model.App) error {
 	ing, err := i.kuberepo.GetIngress(ctx, app.Ingress.Namespace, app.Ingress.Name)
 	if err != nil {

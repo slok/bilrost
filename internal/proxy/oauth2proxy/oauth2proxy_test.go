@@ -250,3 +250,107 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 		})
 	}
 }
+
+func getBaseUnprovisionSettings() proxy.UnprovisionSettings {
+	return proxy.UnprovisionSettings{
+		IngressName:                   "test",
+		IngressNamespace:              "test-ns",
+		OriginalServiceName:           "test-orig-svc",
+		OriginalServicePortOrNamePort: "http-orig",
+	}
+}
+
+func TestOIDCProvisionerUnprovision(t *testing.T) {
+	tests := map[string]struct {
+		settings func() proxy.UnprovisionSettings
+		mock     func(m *oauth2proxymock.KubernetesRepository)
+		expErr   bool
+	}{
+		"A correct proxy unprovisioning should restore the original ingress and GC the proxy.": {
+			settings: getBaseUnprovisionSettings,
+			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				storedIng := getBaseIngress()
+				m.On("GetIngress", context.TODO(), "test-ns", "test").Once().Return(storedIng, nil)
+
+				expIngress := storedIng.DeepCopy()
+				expIngress.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1beta1.IngressBackend{
+					ServiceName: "test-orig-svc",
+					ServicePort: intstr.FromString("http-orig"),
+				}
+				m.On("UpdateIngress", context.TODO(), expIngress).Once().Return(nil)
+				m.On("DeleteService", context.TODO(), "test-ns", "test-bilrost-proxy").Once().Return(nil)
+				m.On("DeleteDeployment", context.TODO(), "test-ns", "test-bilrost-proxy").Once().Return(nil)
+			},
+		},
+
+		"If stored ingress already has been restored, it shouldn't be updated.": {
+			settings: getBaseUnprovisionSettings,
+			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				storedIng := getBaseIngress()
+				storedIng.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1beta1.IngressBackend{
+					ServiceName: "test-orig-svc",
+					ServicePort: intstr.FromString("http-orig"),
+				}
+				m.On("GetIngress", context.TODO(), "test-ns", "test").Once().Return(storedIng, nil)
+				m.On("DeleteService", context.TODO(), "test-ns", "test-bilrost-proxy").Once().Return(nil)
+				m.On("DeleteDeployment", context.TODO(), "test-ns", "test-bilrost-proxy").Once().Return(nil)
+			},
+		},
+
+		"Failing getting the ingress should stop the process.": {
+			settings: getBaseUnprovisionSettings,
+			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				m.On("GetIngress", context.TODO(), mock.Anything, mock.Anything).Once().Return(nil, fmt.Errorf("wanted error"))
+			},
+			expErr: true,
+		},
+
+		"Failing restoring the ingress should stop the process.": {
+			settings: getBaseUnprovisionSettings,
+			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				m.On("GetIngress", context.TODO(), mock.Anything, mock.Anything).Once().Return(getBaseIngress(), nil)
+				m.On("UpdateIngress", context.TODO(), mock.Anything).Once().Return(fmt.Errorf("wanted error"))
+			},
+			expErr: true,
+		},
+
+		"Failing deleting the proxy service should stop the process.": {
+			settings: getBaseUnprovisionSettings,
+			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				m.On("GetIngress", context.TODO(), mock.Anything, mock.Anything).Once().Return(getBaseIngress(), nil)
+				m.On("UpdateIngress", context.TODO(), mock.Anything).Once().Return(nil)
+				m.On("DeleteService", context.TODO(), mock.Anything, mock.Anything).Once().Return(fmt.Errorf("wanted error"))
+			},
+			expErr: true,
+		},
+
+		"Failing deleting the proxy deployment should stop the process.": {
+			settings: getBaseUnprovisionSettings,
+			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				m.On("GetIngress", context.TODO(), mock.Anything, mock.Anything).Once().Return(getBaseIngress(), nil)
+				m.On("UpdateIngress", context.TODO(), mock.Anything).Once().Return(nil)
+				m.On("DeleteService", context.TODO(), mock.Anything, mock.Anything).Once().Return(nil)
+				m.On("DeleteDeployment", context.TODO(), mock.Anything, mock.Anything).Once().Return(fmt.Errorf("wanted error"))
+			},
+			expErr: true,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
+			m := &oauth2proxymock.KubernetesRepository{}
+			test.mock(m)
+
+			prov := oauth2proxy.NewOIDCProvisioner(m, log.Dummy)
+			err := prov.Unprovision(context.TODO(), test.settings())
+
+			if test.expErr {
+				assert.Error(err)
+			} else if assert.NoError(err) {
+				m.AssertExpectations(t)
+			}
+		})
+	}
+}

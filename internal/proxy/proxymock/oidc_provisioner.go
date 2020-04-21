@@ -26,11 +26,11 @@ func (_m *OIDCProvisioner) Provision(ctx context.Context, settings proxy.OIDCPro
 }
 
 // Unprovision provides a mock function with given fields: ctx, settings
-func (_m *OIDCProvisioner) Unprovision(ctx context.Context, settings proxy.OIDCProxySettings) error {
+func (_m *OIDCProvisioner) Unprovision(ctx context.Context, settings proxy.UnprovisionSettings) error {
 	ret := _m.Called(ctx, settings)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, proxy.OIDCProxySettings) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, proxy.UnprovisionSettings) error); ok {
 		r0 = rf(ctx, settings)
 	} else {
 		r0 = ret.Error(0)

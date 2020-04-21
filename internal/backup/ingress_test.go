@@ -31,6 +31,7 @@ func TestIngressBackupperBackupOrGet(t *testing.T) {
 				},
 			},
 			data: backup.Data{
+				AuthBackendID:         "auth-test",
 				ServiceName:           "test-svc",
 				ServicePortOrNamePort: "http",
 			},
@@ -46,10 +47,11 @@ func TestIngressBackupperBackupOrGet(t *testing.T) {
 				m.On("GetIngress", mock.Anything, "test-ns", "test-ing").Once().Return(ing, nil)
 
 				expIng := ing.DeepCopy()
-				expIng.Annotations["auth.bilrost.slok.dev/backup"] = `{"serviceName":"test-svc","servicePortOrNamePort":"http"}`
+				expIng.Annotations["auth.bilrost.slok.dev/backup"] = `{"authBackendID":"auth-test","serviceName":"test-svc","servicePortOrNamePort":"http"}`
 				m.On("UpdateIngress", mock.Anything, expIng).Once().Return(nil)
 			},
 			expData: backup.Data{
+				AuthBackendID:         "auth-test",
 				ServiceName:           "test-svc",
 				ServicePortOrNamePort: "http",
 			},
@@ -72,13 +74,14 @@ func TestIngressBackupperBackupOrGet(t *testing.T) {
 						Name: "test-ing",
 						Annotations: map[string]string{
 							"test":                         "test1",
-							"auth.bilrost.slok.dev/backup": `{"serviceName":"test-svc2","servicePortOrNamePort":"8080"}`,
+							"auth.bilrost.slok.dev/backup": `{"authBackendID":"auth-test2","serviceName":"test-svc2","servicePortOrNamePort":"8080"}`,
 						},
 					},
 				}
 				m.On("GetIngress", mock.Anything, "test-ns", "test-ing").Once().Return(ing, nil)
 			},
 			expData: backup.Data{
+				AuthBackendID:         "auth-test2",
 				ServiceName:           "test-svc2",
 				ServicePortOrNamePort: "8080",
 			},
@@ -94,6 +97,80 @@ func TestIngressBackupperBackupOrGet(t *testing.T) {
 
 			bk := backup.NewIngressBackupper(mk, log.Dummy)
 			data, err := bk.BackupOrGet(context.TODO(), test.app, test.data)
+
+			if test.expErr {
+				assert.Error(err)
+			} else if assert.NoError(err) {
+				mk.AssertExpectations(t)
+				assert.Equal(&test.expData, data)
+			}
+		})
+	}
+}
+
+func TestIngressBackupperGetBackup(t *testing.T) {
+	tests := map[string]struct {
+		app     model.App
+		mock    func(m *backupmock.KubernetesRepository)
+		expData backup.Data
+		expErr  bool
+	}{
+		"If the data does not exists, it should return an error.": {
+			app: model.App{
+				Ingress: model.KubernetesIngress{
+					Name:      "test-ing",
+					Namespace: "test-ns",
+				},
+			},
+			mock: func(m *backupmock.KubernetesRepository) {
+				ing := &networkingv1beta1.Ingress{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-ing",
+						Annotations: map[string]string{
+							"test": "test1",
+						},
+					},
+				}
+				m.On("GetIngress", mock.Anything, "test-ns", "test-ing").Once().Return(ing, nil)
+			},
+			expErr: true,
+		},
+		"If the data exists, it should return the data.": {
+			app: model.App{
+				Ingress: model.KubernetesIngress{
+					Name:      "test-ing",
+					Namespace: "test-ns",
+				},
+			},
+			mock: func(m *backupmock.KubernetesRepository) {
+				ing := &networkingv1beta1.Ingress{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-ing",
+						Annotations: map[string]string{
+							"test":                         "test1",
+							"auth.bilrost.slok.dev/backup": `{"authBackendID":"auth-test","serviceName":"test-svc2","servicePortOrNamePort":"8080"}`,
+						},
+					},
+				}
+				m.On("GetIngress", mock.Anything, "test-ns", "test-ing").Once().Return(ing, nil)
+			},
+			expData: backup.Data{
+				AuthBackendID:         "auth-test",
+				ServiceName:           "test-svc2",
+				ServicePortOrNamePort: "8080",
+			},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
+			mk := &backupmock.KubernetesRepository{}
+			test.mock(mk)
+
+			bk := backup.NewIngressBackupper(mk, log.Dummy)
+			data, err := bk.GetBackup(context.TODO(), test.app)
 
 			if test.expErr {
 				assert.Error(err)
@@ -124,7 +201,7 @@ func TestIngressBackupperDeleteBackup(t *testing.T) {
 						Name: "test-ing",
 						Annotations: map[string]string{
 							"test":                         "test1",
-							"auth.bilrost.slok.dev/backup": `{"serviceName":"test-svc","servicePortOrNamePort":"http"}`,
+							"auth.bilrost.slok.dev/backup": `{"authBackendID":"auth-test","serviceName":"test-svc","servicePortOrNamePort":"http"}`,
 						},
 					},
 				}
@@ -136,7 +213,7 @@ func TestIngressBackupperDeleteBackup(t *testing.T) {
 			},
 		},
 
-		"If the backup data is not stored, it should not delete the ingress.": {
+		"If the backup data is not stored, it should not delete the data from the ingress.": {
 			app: model.App{
 				Ingress: model.KubernetesIngress{
 					Name:      "test-ing",
