@@ -99,24 +99,22 @@ func Run() error {
 		)
 	}
 
-	// Ingress controller (When ingress mode is enabled).
-	if cmdCfg.IngressMode {
-		logger.Infof("ingress mode has been enabled")
-
-		handler, err := controller.NewIngressHandler(controller.IngressHandlerConfig{
-			KubeSvc:     kubeSvc,
-			SecuritySvc: secSvc,
-			Logger:      logger,
+	// Controller.
+	{
+		handler, err := controller.NewHandler(controller.HandlerConfig{
+			KubernetesRepo: kubeSvc,
+			SecuritySvc:    secSvc,
+			Logger:         logger,
 		})
 		if err != nil {
 			return fmt.Errorf("could not create ingress handler: %w", err)
 		}
 
-		ingCtrl, err := koopercontroller.New(&koopercontroller.Config{
+		ctrl, err := koopercontroller.New(&koopercontroller.Config{
 			Handler:              handler,
-			Retriever:            controller.NewIngressRetriever(cmdCfg.Namespace, kubeSvc),
+			Retriever:            controller.NewRetriever(cmdCfg.Namespace, kubeSvc),
 			Logger:               kooperLogger,
-			Name:                 "ingress-controller",
+			Name:                 "security-controller",
 			ConcurrentWorkers:    cmdCfg.Workers,
 			ProcessingJobRetries: 2,
 		})
@@ -127,7 +125,7 @@ func Run() error {
 		stopC := make(chan struct{})
 		g.Add(
 			func() error {
-				return ingCtrl.Run(stopC)
+				return ctrl.Run(stopC)
 			},
 			func(_ error) {
 				close(stopC)

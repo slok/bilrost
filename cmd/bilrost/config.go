@@ -13,10 +13,9 @@ type CmdConfig struct {
 	Development bool
 	Debug       bool
 
-	Workers     int
-	KubeConfig  string
-	Namespace   string
-	IngressMode bool
+	Workers    int
+	KubeConfig string
+	Namespace  string
 }
 
 // NewCmdConfig returns a new command configuration.
@@ -28,7 +27,6 @@ func NewCmdConfig() (*CmdConfig, error) {
 
 	app.Flag("debug", "Enable debug mode.").BoolVar(&c.Debug)
 	app.Flag("development", "Enable development mode.").BoolVar(&c.Development)
-	app.Flag("ingress-mode", "Runs the application listening to ingresses instead of CRDs.").BoolVar(&c.IngressMode)
 	app.Flag("kube-config", "kubernetes configuration path, only used when development mode enabled.").Default(kubeHome).Short('c').StringVar(&c.KubeConfig)
 	app.Flag("namespace", "kubernetes namespace where the controller will listen to events.").Short('n').StringVar(&c.Namespace)
 	app.Flag("workers", "concurrent processing workers for each kubernetes controller.").Default("3").Short('w').IntVar(&c.Workers)

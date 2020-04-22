@@ -33,6 +33,8 @@ type Service interface {
 	RollbackAppSecurity(ctx context.Context, app model.App) error
 }
 
+//go:generate mockery -case underscore -output securitymock -outpkg securitymock -name Service
+
 type service struct {
 	backupper        backup.Backupper
 	proxyProvisioner proxy.OIDCProvisioner

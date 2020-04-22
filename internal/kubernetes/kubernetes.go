@@ -222,8 +222,8 @@ func (s Service) GetServiceHostAndPort(ctx context.Context, svc model.Kubernetes
 
 // Interface implementation checks.
 var (
-	_ security.AuthBackendRepository          = Service{}
-	_ security.KubeServiceTranslator          = Service{}
-	_ oauth2proxy.KubernetesRepository        = Service{}
-	_ controller.IngressControllerKubeService = Service{}
+	_ security.AuthBackendRepository   = Service{}
+	_ security.KubeServiceTranslator   = Service{}
+	_ oauth2proxy.KubernetesRepository = Service{}
+	_ controller.KubernetesRepository  = Service{}
 )
