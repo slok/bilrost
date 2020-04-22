@@ -196,20 +196,6 @@ func (s Service) WatchIngresses(ctx context.Context, ns string, labelSelector ma
 	})
 }
 
-// ListAuthBackends satisfies controller.AuthBackendsControllerKubeService interface.
-func (s Service) ListAuthBackends(_ context.Context, labelSelector map[string]string) (*authv1.AuthBackendList, error) {
-	return s.bilrostCli.AuthV1().AuthBackends().List(metav1.ListOptions{
-		LabelSelector: labels.Set(labelSelector).String(),
-	})
-}
-
-// WatchAuthBackends satisfies controller.AuthBackendsControllerKubeService interface.
-func (s Service) WatchAuthBackends(ctx context.Context, labelSelector map[string]string) (watch.Interface, error) {
-	return s.bilrostCli.AuthV1().AuthBackends().Watch(metav1.ListOptions{
-		LabelSelector: labels.Set(labelSelector).String(),
-	})
-}
-
 // GetServiceHostAndPort satisifies security.KubeServiceTranslator interface.
 func (s Service) GetServiceHostAndPort(ctx context.Context, svc model.KubernetesService) (string, int, error) {
 	host := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
@@ -236,9 +222,8 @@ func (s Service) GetServiceHostAndPort(ctx context.Context, svc model.Kubernetes
 
 // Interface implementation checks.
 var (
-	_ security.AuthBackendRepository               = Service{}
-	_ security.KubeServiceTranslator               = Service{}
-	_ oauth2proxy.KubernetesRepository             = Service{}
-	_ controller.IngressControllerKubeService      = Service{}
-	_ controller.AuthBackendsControllerKubeService = Service{}
+	_ security.AuthBackendRepository          = Service{}
+	_ security.KubeServiceTranslator          = Service{}
+	_ oauth2proxy.KubernetesRepository        = Service{}
+	_ controller.IngressControllerKubeService = Service{}
 )
