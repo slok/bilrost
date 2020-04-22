@@ -138,6 +138,10 @@ func TestHandler(t *testing.T) {
 				ing.Annotations = map[string]string{
 					"auth.bilrost.slok.dev/backend": "test-backend-id",
 				}
+				ing.Finalizers = []string{
+					"test1",
+					"test2",
+				}
 				mkr.On("GetIngress", mock.Anything, "test-ns", "test").Once().Return(ing, nil)
 
 				// Marked as handled and with finalizer.
@@ -146,7 +150,11 @@ func TestHandler(t *testing.T) {
 					"auth.bilrost.slok.dev/backend": "test-backend-id",
 					"auth.bilrost.slok.dev/handled": "true",
 				}
-				expIng.Finalizers = []string{"finalizers.auth.bilrost.slok.dev/security"}
+				expIng.Finalizers = []string{
+					"test1",
+					"test2",
+					"finalizers.auth.bilrost.slok.dev/security",
+				}
 				mkr.On("UpdateIngress", mock.Anything, expIng).Once().Return(nil)
 			},
 		},
@@ -225,12 +233,19 @@ func TestHandler(t *testing.T) {
 				ing.Annotations = map[string]string{
 					"auth.bilrost.slok.dev/handled": "true",
 				}
-				ing.Finalizers = []string{"finalizers.auth.bilrost.slok.dev/security"}
+				ing.Finalizers = []string{
+					"test1",
+					"finalizers.auth.bilrost.slok.dev/security",
+					"test2",
+				}
 				mkr.On("GetIngress", mock.Anything, "test-ns", "test").Once().Return(ing, nil)
 
 				expIng := ing.DeepCopy()
 				expIng.Annotations = map[string]string{}
-				expIng.Finalizers = []string{}
+				expIng.Finalizers = []string{
+					"test1",
+					"test2",
+				}
 				mkr.On("UpdateIngress", mock.Anything, expIng).Once().Return(nil)
 			},
 		},
