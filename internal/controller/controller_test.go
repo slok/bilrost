@@ -119,7 +119,7 @@ func TestHandler(t *testing.T) {
 			expErr: true,
 		},
 
-		"An ingress that wasn't handled before with backend annotation should be secured and marked as hanlded.": {
+		"An ingress that wasn't handled before with backend annotation should be secured and marked as handled.": {
 			obj: func() runtime.Object {
 				return getBaseIngress()
 			},
@@ -137,7 +137,7 @@ func TestHandler(t *testing.T) {
 			},
 		},
 
-		"An ingress that was already handled with backend annotation should be secured and not marked as hanlded.": {
+		"An ingress that was already handled with backend annotation should be secured and not marked as handled.": {
 			obj: func() runtime.Object {
 				return getBaseIngress()
 			},
