@@ -3,6 +3,7 @@ package controller_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -25,9 +26,6 @@ func getBaseIngress() *networkingv1beta1.Ingress {
 			Name:      "test",
 			Namespace: "test-ns",
 			Labels:    map[string]string{"in-test": "true"},
-			Annotations: map[string]string{
-				"auth.bilrost.slok.dev/backend": "test-backend-id",
-			},
 		},
 		Spec: networkingv1beta1.IngressSpec{
 			Rules: []networkingv1beta1.IngressRule{
@@ -74,7 +72,7 @@ func TestHandler(t *testing.T) {
 		mock   func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service)
 		expErr bool
 	}{
-		"If we try handling an object that we are not supose to handle it should not handle.": {
+		"If we try handling an object that we are not supose to handle it should not be handled.": {
 			obj: func() runtime.Object {
 				return &corev1.Pod{}
 			},
@@ -84,16 +82,18 @@ func TestHandler(t *testing.T) {
 		"An ingress without controller annotations should be ignored.": {
 			obj: func() runtime.Object {
 				ing := getBaseIngress()
-				delete(ing.Annotations, "auth.bilrost.slok.dev/backend")
+				ing.Annotations = map[string]string{}
 				return ing
 			},
 			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {},
 		},
 
-		"An ingress with empty controller annotations should be ignored.": {
+		"An ingress with empty/blank backend controller annotation should be ignored.": {
 			obj: func() runtime.Object {
 				ing := getBaseIngress()
-				ing.Annotations["auth.bilrost.slok.dev/backend"] = ""
+				ing.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/backend": "",
+				}
 				return ing
 			},
 			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {},
@@ -102,6 +102,9 @@ func TestHandler(t *testing.T) {
 		"An ingress with more than 1 ingress rule should error.": {
 			obj: func() runtime.Object {
 				ing := getBaseIngress()
+				ing.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/backend": "test-backend-id",
+				}
 				ing.Spec.Rules = append(ing.Spec.Rules, networkingv1beta1.IngressRule{})
 				return ing
 			},
@@ -112,6 +115,9 @@ func TestHandler(t *testing.T) {
 		"An ingress with more than 1 HTTP paths should error.": {
 			obj: func() runtime.Object {
 				ing := getBaseIngress()
+				ing.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/backend": "test-backend-id",
+				}
 				ing.Spec.Rules[0].HTTP.Paths = append(ing.Spec.Rules[0].HTTP.Paths, networkingv1beta1.HTTPIngressPath{})
 				return ing
 			},
@@ -119,44 +125,101 @@ func TestHandler(t *testing.T) {
 			expErr: true,
 		},
 
-		"An ingress that wasn't handled before with backend annotation should be secured and marked as handled.": {
+		"An ingress that is not ready but should be handled should be set ready to be handled on next iterations.": {
 			obj: func() runtime.Object {
-				return getBaseIngress()
+				ing := getBaseIngress()
+				ing.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/backend": "test-backend-id",
+				}
+				return ing
 			},
 			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {
-				// Secure process.
-				expApp := getBaseApp()
-				ms.On("SecureApp", mock.Anything, expApp).Once().Return(nil)
-
-				// Mark as handled process.
 				ing := getBaseIngress()
+				ing.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/backend": "test-backend-id",
+				}
+				ing.Finalizers = []string{
+					"test1",
+					"test2",
+				}
 				mkr.On("GetIngress", mock.Anything, "test-ns", "test").Once().Return(ing, nil)
-				handledIng := ing.DeepCopy()
-				handledIng.Annotations["auth.bilrost.slok.dev/handled"] = "true"
-				mkr.On("UpdateIngress", mock.Anything, handledIng).Once().Return(nil)
+
+				// Marked as handled and with finalizer.
+				expIng := getBaseIngress()
+				expIng.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/backend": "test-backend-id",
+					"auth.bilrost.slok.dev/handled": "true",
+				}
+				expIng.Finalizers = []string{
+					"test1",
+					"test2",
+					"finalizers.auth.bilrost.slok.dev/security",
+				}
+				mkr.On("UpdateIngress", mock.Anything, expIng).Once().Return(nil)
 			},
 		},
 
-		"An ingress that was already handled with backend annotation should be secured and not marked as handled.": {
+		"An ingress that is ready to be handled should be secured (internal ready marks not mutated by 3rd parties).": {
 			obj: func() runtime.Object {
-				return getBaseIngress()
+				ing := getBaseIngress()
+				ing.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/backend": "test-backend-id",
+					"auth.bilrost.slok.dev/handled": "true",
+				}
+				return ing
 			},
 			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {
 				// Secure process.
 				ms.On("SecureApp", mock.Anything, mock.Anything).Once().Return(nil)
 
-				// Mark as handled.
+				// Our ingress is ok.
 				ing := getBaseIngress()
-				ing.Annotations["auth.bilrost.slok.dev/handled"] = "true"
+				ing.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/backend": "test-backend-id",
+					"auth.bilrost.slok.dev/handled": "true",
+				}
+				ing.Finalizers = []string{"finalizers.auth.bilrost.slok.dev/security"}
 				mkr.On("GetIngress", mock.Anything, "test-ns", "test").Once().Return(ing, nil)
+			},
+		},
+
+		"An ingress that is ready to be handled should be secured (internal ready marks mutated by 3rd parties, requires healing ready marks).": {
+			obj: func() runtime.Object {
+				ing := getBaseIngress()
+				ing.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/backend": "test-backend-id",
+					"auth.bilrost.slok.dev/handled": "true",
+				}
+				return ing
+			},
+			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {
+				// Secure process.
+				ms.On("SecureApp", mock.Anything, mock.Anything).Once().Return(nil)
+
+				// Some user or controller has deleted our marks.
+				ing := getBaseIngress()
+				ing.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/backend": "test-backend-id",
+				}
+				mkr.On("GetIngress", mock.Anything, "test-ns", "test").Once().Return(ing, nil)
+
+				// Marked as handled and with finalizer.
+				expIng := getBaseIngress()
+				expIng.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/backend": "test-backend-id",
+					"auth.bilrost.slok.dev/handled": "true",
+				}
+				expIng.Finalizers = []string{"finalizers.auth.bilrost.slok.dev/security"}
+				mkr.On("UpdateIngress", mock.Anything, expIng).Once().Return(nil)
 			},
 		},
 
 		"An ingress that was already handled without backend annotation should rollback and unmark.": {
 			obj: func() runtime.Object {
 				ing := getBaseIngress()
-				ing.Annotations["auth.bilrost.slok.dev/handled"] = "true"
-				delete(ing.Annotations, "auth.bilrost.slok.dev/backend")
+				ing.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/handled": "true",
+				}
 				return ing
 			},
 			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {
@@ -165,14 +228,74 @@ func TestHandler(t *testing.T) {
 				expApp.AuthBackendID = "" // Because we don't have this.
 				ms.On("RollbackAppSecurity", mock.Anything, expApp).Once().Return(nil)
 
-				// Unmark as handled.
+				// Unmark as handled and remove the finalizer.
 				ing := getBaseIngress()
-				ing.Annotations["auth.bilrost.slok.dev/handled"] = "true"
+				ing.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/handled": "true",
+				}
+				ing.Finalizers = []string{
+					"test1",
+					"finalizers.auth.bilrost.slok.dev/security",
+					"test2",
+				}
 				mkr.On("GetIngress", mock.Anything, "test-ns", "test").Once().Return(ing, nil)
-				handledIng := ing.DeepCopy()
-				delete(handledIng.Annotations, "auth.bilrost.slok.dev/handled")
-				mkr.On("UpdateIngress", mock.Anything, handledIng).Once().Return(nil)
+
+				expIng := ing.DeepCopy()
+				expIng.Annotations = map[string]string{}
+				expIng.Finalizers = []string{
+					"test1",
+					"test2",
+				}
+				mkr.On("UpdateIngress", mock.Anything, expIng).Once().Return(nil)
 			},
+		},
+
+		"An ingress that has been deleted should be rollback and unmark.": {
+			obj: func() runtime.Object {
+				ing := getBaseIngress()
+				ing.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/backend": "test-backend-id",
+					"auth.bilrost.slok.dev/handled": "true",
+				}
+				ing.Finalizers = []string{"finalizers.auth.bilrost.slok.dev/security"}
+				ing.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+				return ing
+			},
+			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {
+				// Rollback process.
+				expApp := getBaseApp()
+				ms.On("RollbackAppSecurity", mock.Anything, expApp).Once().Return(nil)
+
+				// Unmark as handled and remove the finalizer.
+				ing := getBaseIngress()
+				ing.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/backend": "test-backend-id",
+					"auth.bilrost.slok.dev/handled": "true",
+				}
+				ing.Finalizers = []string{"finalizers.auth.bilrost.slok.dev/security"}
+				mkr.On("GetIngress", mock.Anything, "test-ns", "test").Once().Return(ing, nil)
+
+				expIng := ing.DeepCopy()
+				expIng.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/backend": "test-backend-id",
+				}
+				expIng.Finalizers = []string{}
+				mkr.On("UpdateIngress", mock.Anything, expIng).Once().Return(nil)
+			},
+		},
+
+		"An ingress that has been deleted  and already cleaned shoudl be ignored.": {
+			obj: func() runtime.Object {
+				ing := getBaseIngress()
+				ing.Annotations = map[string]string{
+					"auth.bilrost.slok.dev/backend": "test-backend-id",
+					"auth.bilrost.slok.dev/handled": "true",
+				}
+				ing.Finalizers = []string{}
+				ing.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+				return ing
+			},
+			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {},
 		},
 	}
 
