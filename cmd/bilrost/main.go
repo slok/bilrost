@@ -99,31 +99,6 @@ func Run() error {
 		)
 	}
 
-	// Backend Auth controller.
-	{
-		baCtrl, err := koopercontroller.New(&koopercontroller.Config{
-			Handler:              controller.NewAuthBackendHandler(logger),
-			Retriever:            controller.NewAuthBackendRetriever(kubeSvc),
-			Logger:               kooperLogger,
-			Name:                 "backend-auth-controller",
-			ConcurrentWorkers:    3,
-			ProcessingJobRetries: 2,
-		})
-		if err != nil {
-			return fmt.Errorf("could not create backend auth kubernetes controller: %w", err)
-		}
-
-		stopC := make(chan struct{})
-		g.Add(
-			func() error {
-				return baCtrl.Run(stopC)
-			},
-			func(_ error) {
-				close(stopC)
-			},
-		)
-	}
-
 	// Ingress controller (When ingress mode is enabled).
 	if cmdCfg.IngressMode {
 		logger.Infof("ingress mode has been enabled")
