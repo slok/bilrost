@@ -118,7 +118,7 @@ func (h handler) Handle(ctx context.Context, obj runtime.Object) error {
 	switch {
 
 	// If the ingress has been deleted and we already cleaned then skip.
-	// Use case: The user has deleted the ingress and wi handled the clean process.
+	// Use case: The user has deleted the ingress and we	 handled the clean process.
 	case clean:
 		logger.Debugf("already clean, nothing to do here...")
 		return nil
@@ -126,7 +126,7 @@ func (h handler) Handle(ctx context.Context, obj runtime.Object) error {
 	// If the ingress is not ready to be handled then prepare for the handling
 	// Use case: The user just added the backend annotation.
 	case wantHandle && !readyToBeHandled && !wantDelete:
-		// Set the required information on the ingress to be reayd to start
+		// Set the required information on the ingress to be ready to start
 		// the security reconciliation loop.
 		err := h.ensureIngressReady(ctx, ing.Namespace, ing.Name)
 		if err != nil {
@@ -155,7 +155,7 @@ func (h handler) Handle(ctx context.Context, obj runtime.Object) error {
 		return nil
 
 	// If we don't have backend but we have the ingress marked means that we
-	// need to trigger a clean up process.
+	// need to trigger a clean up process. Or if the user has deleted the ingress.
 	// Use case: The user has removed the backend annotation.
 	// Use case: The user has deleted the ingress.
 	case !wantHandle && readyToBeHandled, wantDelete:
@@ -194,7 +194,9 @@ func (h handler) ensureIngressReady(ctx context.Context, ns, name string) error 
 
 	// Set the information required on the ingress and update.
 	storedIng.Annotations[handledAnnotation] = "true"
-	storedIng.ObjectMeta.Finalizers = append(storedIng.ObjectMeta.Finalizers, securityfinalizer)
+	if !finalizerPresent {
+		storedIng.ObjectMeta.Finalizers = append(storedIng.ObjectMeta.Finalizers, securityfinalizer)
+	}
 	err = h.repo.UpdateIngress(ctx, storedIng)
 	if err != nil {
 		return fmt.Errorf("could not update ingress: %w", err)
