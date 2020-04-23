@@ -33,30 +33,34 @@ func getBaseSettings() proxy.OIDCProxySettings {
 	}
 }
 
-var baseLabels = map[string]string{
-	"app.kubernetes.io/managed-by": "bilrost",
-	"app.kubernetes.io/name":       "oauth2-proxy",
-	"app.kubernetes.io/component":  "proxy",
-	"app.kubernetes.io/instance":   "my-app-bilrost-proxy",
+func getBaseLabels() map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/managed-by": "bilrost",
+		"app.kubernetes.io/name":       "oauth2-proxy",
+		"app.kubernetes.io/component":  "proxy",
+		"app.kubernetes.io/instance":   "my-app-bilrost-proxy",
+	}
 }
 
 func getBaseDeployment() *appsv1.Deployment {
 	replicas := int32(1)
+	checkSumLabels := getBaseLabels()
+	checkSumLabels["bilrost.slok.dev/secret-checksum-to-force-update"] = "fcf3c8b4319dc73b54608b9fe857b39d"
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-app-bilrost-proxy",
 			Namespace: "my-ns",
-			Labels:    baseLabels,
+			Labels:    getBaseLabels(),
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: baseLabels,
+				MatchLabels: getBaseLabels(),
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: baseLabels,
+					Labels: checkSumLabels,
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -110,11 +114,11 @@ func getBaseService() *corev1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-app-bilrost-proxy",
 			Namespace: "my-ns",
-			Labels:    baseLabels,
+			Labels:    getBaseLabels(),
 		},
 		Spec: corev1.ServiceSpec{
 			Type:     "ClusterIP",
-			Selector: baseLabels,
+			Selector: getBaseLabels(),
 			Ports: []corev1.ServicePort{
 				{
 					Port:       80,
@@ -131,12 +135,12 @@ func getBaseSecret() *corev1.Secret {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-app-bilrost-proxy",
 			Namespace: "my-ns",
-			Labels:    baseLabels,
+			Labels:    getBaseLabels(),
 		},
 		Type: corev1.SecretTypeOpaque,
-		StringData: map[string]string{
-			"OIDC_CLIENT_ID":     "my-app-bilrost",
-			"OIDC_CLIENT_SECRET": "my-secret",
+		Data: map[string][]byte{
+			"OIDC_CLIENT_ID":     []byte("my-app-bilrost"),
+			"OIDC_CLIENT_SECRET": []byte("my-secret"),
 		},
 	}
 }
@@ -176,7 +180,7 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 		mock     func(m *oauth2proxymock.KubernetesRepository)
 		expErr   bool
 	}{
-		"A correct proxy provisioning should provision a secret, a deployment, a service, and swap the ingres.": {
+		"A correct proxy provisioning should provision a secret, a deployment, a service, and swap the ingress.": {
 			settings: getBaseSettings,
 			mock: func(m *oauth2proxymock.KubernetesRepository) {
 				expSec := getBaseSecret()
