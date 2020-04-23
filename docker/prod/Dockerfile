@@ -8,7 +8,6 @@ RUN apk --no-cache add \
 
 ARG VERSION
 ENV VERSION=${VERSION}
-ARG ostype=Linux
 
 WORKDIR /src
 COPY . .
@@ -18,5 +17,5 @@ RUN ./scripts/build/build.sh
 FROM alpine:latest
 RUN apk --no-cache add \
     ca-certificates
-COPY --from=build-stage /src/bin/bilrost-linux-amd64 /usr/local/bin/bilrost
+COPY --from=build-stage /src/bin/bilrost /usr/local/bin/bilrost
 ENTRYPOINT ["/usr/local/bin/bilrost"]
