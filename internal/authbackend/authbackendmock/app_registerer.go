@@ -12,17 +12,26 @@ type AppRegisterer struct {
 }
 
 // RegisterApp provides a mock function with given fields: ctx, app
-func (_m *AppRegisterer) RegisterApp(ctx context.Context, app authbackend.OIDCApp) error {
+func (_m *AppRegisterer) RegisterApp(ctx context.Context, app authbackend.OIDCApp) (*authbackend.OIDCAppRegistryData, error) {
 	ret := _m.Called(ctx, app)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, authbackend.OIDCApp) error); ok {
+	var r0 *authbackend.OIDCAppRegistryData
+	if rf, ok := ret.Get(0).(func(context.Context, authbackend.OIDCApp) *authbackend.OIDCAppRegistryData); ok {
 		r0 = rf(ctx, app)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*authbackend.OIDCAppRegistryData)
+		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, authbackend.OIDCApp) error); ok {
+		r1 = rf(ctx, app)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // UnregisterApp provides a mock function with given fields: ctx, appID

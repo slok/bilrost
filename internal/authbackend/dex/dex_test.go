@@ -19,6 +19,7 @@ func TestRegisterApp(t *testing.T) {
 	tests := map[string]struct {
 		oidcApp authbackend.OIDCApp
 		mock    func(c *dexmock.Client)
+		expRes  authbackend.OIDCAppRegistryData
 		expErr  bool
 	}{
 		"An error registering the oidc app should be propagated.": {
@@ -33,7 +34,6 @@ func TestRegisterApp(t *testing.T) {
 			oidcApp: authbackend.OIDCApp{
 				ID:          "test-id",
 				Name:        "test",
-				Secret:      "shhhhh",
 				CallBackURL: "https://whatever.dev/oauth2/callback",
 			},
 			mock: func(c *dexmock.Client) {
@@ -41,11 +41,15 @@ func TestRegisterApp(t *testing.T) {
 					Client: &dexapi.Client{
 						Id:           "test-id",
 						Name:         "test",
-						Secret:       "shhhhh",
+						Secret:       "TODO",
 						RedirectUris: []string{"https://whatever.dev/oauth2/callback"},
 					},
 				}
 				c.On("CreateClient", mock.Anything, expReq).Once().Return(nil, nil)
+			},
+			expRes: authbackend.OIDCAppRegistryData{
+				ClientID:     "test-id",
+				ClientSecret: "TODO",
 			},
 		},
 	}
@@ -58,12 +62,12 @@ func TestRegisterApp(t *testing.T) {
 			test.mock(mdex)
 
 			ar := dex.NewAppRegisterer(mdex, log.Dummy)
-			err := ar.RegisterApp(context.TODO(), test.oidcApp)
+			res, err := ar.RegisterApp(context.TODO(), test.oidcApp)
 
 			if test.expErr {
 				assert.Error(err)
 			} else if assert.NoError(err) {
-				assert.NoError(err)
+				assert.Equal(test.expRes, *res)
 				mdex.AssertExpectations(t)
 			}
 		})

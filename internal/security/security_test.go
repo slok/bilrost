@@ -66,9 +66,12 @@ func TestSecureApp(t *testing.T) {
 					ID:          "test-ns/my-app",
 					Name:        "test-ns/my-app",
 					CallBackURL: "https://my.app.slok.dev/oauth2/callback",
-					Secret:      "TODO",
 				}
-				m.abAppReg.On("RegisterApp", mock.Anything, expOIDCApp).Once().Return(nil)
+				oidcAppReg := &authbackend.OIDCAppRegistryData{
+					ClientID:     "app1",
+					ClientSecret: "my5cr37",
+				}
+				m.abAppReg.On("RegisterApp", mock.Anything, expOIDCApp).Once().Return(oidcAppReg, nil)
 
 				// The original information should be backup up.
 				expData := backup.Data{
@@ -91,8 +94,8 @@ func TestSecureApp(t *testing.T) {
 					URL:              "https://my.app.slok.dev",
 					UpstreamURL:      "http://internal-app.my-ns.svc.cluster.local:8080",
 					IssuerURL:        "https://test-dex.dev",
-					AppID:            "test-ns/my-app",
-					AppSecret:        "TODO",
+					ClientID:         "app1",
+					ClientSecret:     "my5cr37",
 					IngressName:      "my-app",
 					IngressNamespace: "test-ns",
 				}
@@ -131,9 +134,12 @@ func TestSecureApp(t *testing.T) {
 					ID:          "test-ns/my-app",
 					Name:        "test-ns/my-app",
 					CallBackURL: "https://my.app.slok.dev/oauth2/callback",
-					Secret:      "TODO",
 				}
-				m.abAppReg.On("RegisterApp", mock.Anything, expOIDCApp).Once().Return(nil)
+				oidcAppReg := &authbackend.OIDCAppRegistryData{
+					ClientID:     "app1",
+					ClientSecret: "my5cr37",
+				}
+				m.abAppReg.On("RegisterApp", mock.Anything, expOIDCApp).Once().Return(oidcAppReg, nil)
 
 				// The original information is already there, we return the original upstream.
 				expData := backup.Data{
@@ -160,8 +166,8 @@ func TestSecureApp(t *testing.T) {
 					URL:              "https://my.app.slok.dev",
 					UpstreamURL:      "http://internal-app.my-ns.svc.cluster.local:8080",
 					IssuerURL:        "https://test-dex.dev",
-					AppID:            "test-ns/my-app",
-					AppSecret:        "TODO",
+					ClientID:         "app1",
+					ClientSecret:     "my5cr37",
 					IngressName:      "my-app",
 					IngressNamespace: "test-ns",
 				}
@@ -179,7 +185,7 @@ func TestSecureApp(t *testing.T) {
 		"Failing while registering the app on the auth backend should stop the process with failure.": {
 			mock: func(m testMocks) {
 				m.abRepo.On("GetAuthBackend", mock.Anything, mock.Anything).Once().Return(&model.AuthBackend{}, nil)
-				m.abAppReg.On("RegisterApp", mock.Anything, mock.Anything).Once().Return(fmt.Errorf("wanted error"))
+				m.abAppReg.On("RegisterApp", mock.Anything, mock.Anything).Once().Return(nil, fmt.Errorf("wanted error"))
 			},
 			expErr: true,
 		},
@@ -187,7 +193,7 @@ func TestSecureApp(t *testing.T) {
 		"Failing while backuping the data should stop the process with failure.": {
 			mock: func(m testMocks) {
 				m.abRepo.On("GetAuthBackend", mock.Anything, mock.Anything).Once().Return(&model.AuthBackend{}, nil)
-				m.abAppReg.On("RegisterApp", mock.Anything, mock.Anything).Once().Return(nil)
+				m.abAppReg.On("RegisterApp", mock.Anything, mock.Anything).Once().Return(&authbackend.OIDCAppRegistryData{}, nil)
 				m.backupper.On("BackupOrGet", mock.Anything, mock.Anything, mock.Anything).Once().Return(nil, fmt.Errorf("wanted error"))
 			},
 			expErr: true,
@@ -196,7 +202,7 @@ func TestSecureApp(t *testing.T) {
 		"Failing while translating the service to a URL should stop the process with failure.": {
 			mock: func(m testMocks) {
 				m.abRepo.On("GetAuthBackend", mock.Anything, mock.Anything).Once().Return(&model.AuthBackend{}, nil)
-				m.abAppReg.On("RegisterApp", mock.Anything, mock.Anything).Once().Return(nil)
+				m.abAppReg.On("RegisterApp", mock.Anything, mock.Anything).Once().Return(&authbackend.OIDCAppRegistryData{}, nil)
 				m.backupper.On("BackupOrGet", mock.Anything, mock.Anything, mock.Anything).Once().Return(nil, nil)
 				m.svcTranslator.On("GetServiceHostAndPort", mock.Anything, mock.Anything).Once().Return("", 0, fmt.Errorf("wanted error"))
 			},
@@ -206,7 +212,7 @@ func TestSecureApp(t *testing.T) {
 		"Failing while provisioning the proxy should stop the process with failure.": {
 			mock: func(m testMocks) {
 				m.abRepo.On("GetAuthBackend", mock.Anything, mock.Anything).Once().Return(&model.AuthBackend{}, nil)
-				m.abAppReg.On("RegisterApp", mock.Anything, mock.Anything).Once().Return(nil)
+				m.abAppReg.On("RegisterApp", mock.Anything, mock.Anything).Once().Return(&authbackend.OIDCAppRegistryData{}, nil)
 				m.backupper.On("BackupOrGet", mock.Anything, mock.Anything, mock.Anything).Once().Return(nil, nil)
 				m.svcTranslator.On("GetServiceHostAndPort", mock.Anything, mock.Anything).Once().Return("", 0, nil)
 				m.oidcProxyProv.On("Provision", mock.Anything, mock.Anything).Once().Return(fmt.Errorf("wanted error"))
