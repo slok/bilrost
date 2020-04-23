@@ -6,36 +6,37 @@ set -o nounset
 src=./cmd/bilrost
 out=./bin/bilrost
 
-goarch=amd64
-goos=linux
-goarm=7
+ostype=${ostype:-"native"}
+binary_ext=""
 
 if [ $ostype == 'Linux' ]; then
     echo "Building linux release..."
-    goos=linux
+    export GOOS=linux
+    export GOARCH=amd64
     binary_ext=-linux-amd64
 elif [ $ostype == 'Darwin' ]; then
     echo "Building darwin release..."
-    goos=darwin
+    export GOOS=darwin
+    export GOARCH=amd64
     binary_ext=-darwin-amd64
 elif [ $ostype == 'Windows' ]; then
     echo "Building windows release..."
-    goos=windows
+    export GOOS=windows
+    export GOARCH=amd64
     binary_ext=-windows-amd64.exe
 elif [ $ostype == 'ARM64' ]; then
     echo "Building ARM64 release..."
-    goos=linux
-    goarch=arm64
+    export GOOS=linux
+    export GOARCH=arm64
     binary_ext=-linux-arm64
 elif [ $ostype == 'ARM' ]; then
     echo "Building ARM release..."
-    goos=linux
-    goarch=arm
-    goarm=7
+    export GOOS=linux
+    export GOARCH=arm
+    export GOARM=7
     binary_ext=-linux-arm-v7
 else
-    echo "ostype env var required"
-    exit 1
+    echo "Building native release..."
 fi
 
 final_out=${out}${binary_ext}
@@ -43,4 +44,4 @@ ldf_cmp="-w -extldflags '-static'"
 f_ver="-X main.Version=${VERSION:-dev}"
 
 echo "Building binary at ${final_out}"
-GOOS=${goos} GOARCH=${goarch} GOARM=${goarm} CGO_ENABLED=0 go build -o ${final_out} --ldflags "${ldf_cmp} ${f_ver}"  ${src}
+CGO_ENABLED=0 go build -o ${final_out} --ldflags "${ldf_cmp} ${f_ver}"  ${src}
