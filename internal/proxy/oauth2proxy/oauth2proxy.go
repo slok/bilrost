@@ -27,6 +27,8 @@ type KubernetesRepository interface {
 	DeleteDeployment(ctx context.Context, ns, name string) error
 	EnsureService(ctx context.Context, svc *corev1.Service) error
 	DeleteService(ctx context.Context, ns, name string) error
+	EnsureSecret(ctx context.Context, sec *corev1.Secret) error
+	DeleteSecret(ctx context.Context, ns, name string) error
 	GetIngress(ctx context.Context, ns, name string) (*networkingv1beta1.Ingress, error)
 	UpdateIngress(ctx context.Context, ingress *networkingv1beta1.Ingress) error
 }
@@ -53,7 +55,12 @@ func (p provisioner) Provision(ctx context.Context, settings proxy.OIDCProxySett
 	}
 
 	// Provision proxy.
-	dep, err := p.provisionDeployment(ctx, settings)
+	secret, err := p.provisionSecret(ctx, settings)
+	if err != nil {
+		return fmt.Errorf("could not provision secret on Kubernetes: %w", err)
+	}
+
+	dep, err := p.provisionDeployment(ctx, settings, secret)
 	if err != nil {
 		return fmt.Errorf("could not provision deployment on Kubernetes: %w", err)
 	}
@@ -72,10 +79,13 @@ func (p provisioner) Provision(ctx context.Context, settings proxy.OIDCProxySett
 	return nil
 }
 
-func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OIDCProxySettings) (*appsv1.Deployment, error) {
-	const proxyInternalPort = 4180
+const (
+	oidcClientIDEnv     = "OIDC_CLIENT_ID"
+	oidcClientSecretEnv = "OIDC_CLIENT_SECRET"
+)
+
+func (p provisioner) provisionSecret(ctx context.Context, settings proxy.OIDCProxySettings) (*corev1.Secret, error) {
 	name := getResourceName(settings.IngressName)
-	replicas := int32(1)
 	labels := map[string]string{
 		"app.kubernetes.io/managed-by": "bilrost",
 		"app.kubernetes.io/name":       "oauth2-proxy",
@@ -83,10 +93,40 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 		"app.kubernetes.io/instance":   name,
 	}
 
-	deployment := &appsv1.Deployment{
+	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: settings.IngressNamespace,
+			Labels:    labels,
+		},
+		Type: corev1.SecretTypeOpaque,
+		StringData: map[string]string{
+			oidcClientIDEnv:     settings.ClientID,
+			oidcClientSecretEnv: settings.ClientSecret,
+		},
+	}
+
+	err := p.kuberepo.EnsureSecret(ctx, secret)
+	if err != nil {
+		return nil, fmt.Errorf("could not ensure proxy secret: %w", err)
+	}
+
+	return secret, nil
+}
+
+func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OIDCProxySettings, secret *corev1.Secret) (*appsv1.Deployment, error) {
+	const proxyInternalPort = 4180
+	replicas := int32(1)
+
+	// For consistency we will create everything with the same names and labels.
+	name := secret.Name
+	ns := secret.Namespace
+	labels := secret.Labels
+
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
 			Labels:    labels,
 			// TODO(slok): Use owner refs or apply our finalizers?.
 		},
@@ -106,9 +146,9 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 							Image: "quay.io/oauth2-proxy/oauth2-proxy:v5.1.0",
 							Args: []string{
 								fmt.Sprintf(`--oidc-issuer-url=%s`, settings.IssuerURL),
-								fmt.Sprintf(`--client-id=%s`, settings.ClientID),
+								fmt.Sprintf(`--client-id=$(%s)`, oidcClientIDEnv),
 								// TODO(slok): Create asecret and inject as env var.
-								fmt.Sprintf(`--client-secret=%s`, settings.ClientSecret),
+								fmt.Sprintf(`--client-secret=$(%s)`, oidcClientSecretEnv),
 								fmt.Sprintf(`--http-address=0.0.0.0:%d`, proxyInternalPort),
 								fmt.Sprintf(`--redirect-url=%s/oauth2/callback`, settings.URL),
 								fmt.Sprintf(`--upstream=%s`, settings.UpstreamURL),
@@ -133,6 +173,13 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 									corev1.ResourceMemory: resource.MustParse("20Mi"),
 								},
 							},
+							EnvFrom: []corev1.EnvFromSource{{
+								SecretRef: &corev1.SecretEnvSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: name,
+									},
+								},
+							}},
 						},
 					},
 				},
@@ -154,15 +201,20 @@ const (
 )
 
 func (p provisioner) provisionDeploymentService(ctx context.Context, dep *appsv1.Deployment) error {
+	// For consistency we will create everything with the same names and labels.
+	name := dep.Name
+	ns := dep.Namespace
+	labels := dep.Labels
+
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      dep.Name,
-			Namespace: dep.Namespace,
-			Labels:    dep.Labels,
+			Name:      name,
+			Namespace: ns,
+			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
 			Type:     "ClusterIP",
-			Selector: dep.Labels,
+			Selector: labels,
 			Ports: []corev1.ServicePort{
 				{
 					Port:       proxySvcPort,
@@ -197,6 +249,7 @@ func (p provisioner) setIngressToProxy(ctx context.Context, settings proxy.OIDCP
 
 func (p provisioner) Unprovision(ctx context.Context, settings proxy.UnprovisionSettings) error {
 	name := getResourceName(settings.IngressName)
+	ns := settings.IngressNamespace
 
 	// Update ingress with original service.
 	// Is important to make this as first step becase we don't want to be
@@ -207,11 +260,15 @@ func (p provisioner) Unprovision(ctx context.Context, settings proxy.Unprovision
 	}
 
 	// Delete Proxy.
-	err = p.kuberepo.DeleteService(ctx, settings.IngressNamespace, name)
+	err = p.kuberepo.DeleteService(ctx, ns, name)
 	if err != nil {
 		return fmt.Errorf("could not unprovision proxy service: %w", err)
 	}
-	err = p.kuberepo.DeleteDeployment(ctx, settings.IngressNamespace, name)
+	err = p.kuberepo.DeleteDeployment(ctx, ns, name)
+	if err != nil {
+		return fmt.Errorf("could not unprovision proxy deployment: %w", err)
+	}
+	err = p.kuberepo.DeleteSecret(ctx, ns, name)
 	if err != nil {
 		return fmt.Errorf("could not unprovision proxy deployment: %w", err)
 	}

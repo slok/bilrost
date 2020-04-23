@@ -28,6 +28,20 @@ func (_m *KubernetesRepository) DeleteDeployment(ctx context.Context, ns string,
 	return r0
 }
 
+// DeleteSecret provides a mock function with given fields: ctx, ns, name
+func (_m *KubernetesRepository) DeleteSecret(ctx context.Context, ns string, name string) error {
+	ret := _m.Called(ctx, ns, name)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, ns, name)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // DeleteService provides a mock function with given fields: ctx, ns, name
 func (_m *KubernetesRepository) DeleteService(ctx context.Context, ns string, name string) error {
 	ret := _m.Called(ctx, ns, name)
@@ -49,6 +63,20 @@ func (_m *KubernetesRepository) EnsureDeployment(ctx context.Context, dep *v1.De
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, *v1.Deployment) error); ok {
 		r0 = rf(ctx, dep)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// EnsureSecret provides a mock function with given fields: ctx, sec
+func (_m *KubernetesRepository) EnsureSecret(ctx context.Context, sec *corev1.Secret) error {
+	ret := _m.Called(ctx, sec)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, *corev1.Secret) error); ok {
+		r0 = rf(ctx, sec)
 	} else {
 		r0 = ret.Error(0)
 	}
