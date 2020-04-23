@@ -2,6 +2,8 @@ package oauth2proxy
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -86,12 +88,7 @@ const (
 
 func (p provisioner) provisionSecret(ctx context.Context, settings proxy.OIDCProxySettings) (*corev1.Secret, error) {
 	name := getResourceName(settings.IngressName)
-	labels := map[string]string{
-		"app.kubernetes.io/managed-by": "bilrost",
-		"app.kubernetes.io/name":       "oauth2-proxy",
-		"app.kubernetes.io/component":  "proxy",
-		"app.kubernetes.io/instance":   name,
-	}
+	labels := getLabels(name)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -100,9 +97,9 @@ func (p provisioner) provisionSecret(ctx context.Context, settings proxy.OIDCPro
 			Labels:    labels,
 		},
 		Type: corev1.SecretTypeOpaque,
-		StringData: map[string]string{
-			oidcClientIDEnv:     settings.ClientID,
-			oidcClientSecretEnv: settings.ClientSecret,
+		Data: map[string][]byte{
+			oidcClientIDEnv:     []byte(settings.ClientID),
+			oidcClientSecretEnv: []byte(settings.ClientSecret),
 		},
 	}
 
@@ -121,7 +118,18 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 	// For consistency we will create everything with the same names and labels.
 	name := secret.Name
 	ns := secret.Namespace
-	labels := secret.Labels
+	labels := getLabels(name)
+
+	// Small hack to automatically force a rolling deploy when the secrets change,
+	// if we don't use something to force the rolling update the deployment will not
+	// be updated although the secrets change.
+	// More information: https://github.com/kubernetes/kubernetes/issues/22368
+	checksumLabels := getLabels(name)
+	checksum, err := secretChecksum(secret)
+	if err != nil {
+		return nil, fmt.Errorf("could not get checksum of secret data: %w", err)
+	}
+	checksumLabels["bilrost.slok.dev/secret-checksum-to-force-update"] = checksum
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -137,7 +145,7 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
+					Labels: checksumLabels,
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -187,7 +195,7 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 		},
 	}
 
-	err := p.kuberepo.EnsureDeployment(ctx, deployment)
+	err = p.kuberepo.EnsureDeployment(ctx, deployment)
 	if err != nil {
 		return nil, fmt.Errorf("could not set up proxy deployment: %w", err)
 	}
@@ -204,7 +212,7 @@ func (p provisioner) provisionDeploymentService(ctx context.Context, dep *appsv1
 	// For consistency we will create everything with the same names and labels.
 	name := dep.Name
 	ns := dep.Namespace
-	labels := dep.Labels
+	labels := getLabels(name)
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -331,4 +339,23 @@ func (p provisioner) updateIngressBackend(ctx context.Context, ns, name string, 
 
 func getResourceName(name string) string {
 	return fmt.Sprintf("%s-bilrost-proxy", name)
+}
+
+func getLabels(name string) map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/managed-by": "bilrost",
+		"app.kubernetes.io/name":       "oauth2-proxy",
+		"app.kubernetes.io/component":  "proxy",
+		"app.kubernetes.io/instance":   name,
+	}
+}
+
+func secretChecksum(s *corev1.Secret) (string, error) {
+	d, err := json.Marshal(s.Data)
+	if err != nil {
+		return "", err
+	}
+
+	checksum := md5.Sum([]byte(d))
+	return fmt.Sprintf("%x", checksum), nil
 }
