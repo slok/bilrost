@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/slok/bilrost/internal/authbackend/dex"
 	"github.com/slok/bilrost/internal/controller"
 	"github.com/slok/bilrost/internal/log"
 	"github.com/slok/bilrost/internal/model"
@@ -46,7 +47,7 @@ func (s Service) GetAuthBackend(_ context.Context, id string) (*model.AuthBacken
 
 	ab, err := s.bilrostCli.AuthV1().AuthBackends().Get(id, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("could not retrieve auth backend from Kubernetes: %w", err)
+		return nil, err
 	}
 
 	res := mapAuthBackendK8sToModel(ab)
@@ -76,11 +77,11 @@ func (s Service) EnsureDeployment(_ context.Context, dep *appsv1.Deployment) err
 	storedDep, err := s.coreCli.AppsV1().Deployments(dep.Namespace).Get(dep.Name, metav1.GetOptions{})
 	if err != nil {
 		if !kubeerrors.IsNotFound(err) {
-			return fmt.Errorf("could not get deployment: %w", err)
+			return err
 		}
 		_, err = s.coreCli.AppsV1().Deployments(dep.Namespace).Create(dep)
 		if err != nil {
-			return fmt.Errorf("could not create deployment: %w", err)
+			return err
 		}
 		logger.Debugf("deployment has been created")
 
@@ -91,7 +92,7 @@ func (s Service) EnsureDeployment(_ context.Context, dep *appsv1.Deployment) err
 	dep.ObjectMeta.ResourceVersion = storedDep.ResourceVersion
 	_, err = s.coreCli.AppsV1().Deployments(dep.Namespace).Update(dep)
 	if err != nil {
-		return fmt.Errorf("could not update deployment: %w", err)
+		return err
 	}
 	logger.Debugf("deployment has been updated")
 
@@ -104,7 +105,7 @@ func (s Service) DeleteDeployment(_ context.Context, ns, name string) error {
 
 	err := s.coreCli.AppsV1().Deployments(ns).Delete(name, &metav1.DeleteOptions{})
 	if err != nil {
-		return fmt.Errorf("could not delete deployment: %w", err)
+		return err
 	}
 
 	logger.Debugf("deployment has been deleted")
@@ -118,11 +119,11 @@ func (s Service) EnsureService(_ context.Context, svc *corev1.Service) error {
 	storedSvc, err := s.coreCli.CoreV1().Services(svc.Namespace).Get(svc.Name, metav1.GetOptions{})
 	if err != nil {
 		if !kubeerrors.IsNotFound(err) {
-			return fmt.Errorf("could not get service: %w", err)
+			return err
 		}
 		_, err = s.coreCli.CoreV1().Services(svc.Namespace).Create(svc)
 		if err != nil {
-			return fmt.Errorf("could not create service: %w", err)
+			return err
 		}
 		logger.Debugf("service has been created")
 
@@ -134,7 +135,7 @@ func (s Service) EnsureService(_ context.Context, svc *corev1.Service) error {
 	svc.Spec.ClusterIP = storedSvc.Spec.ClusterIP
 	_, err = s.coreCli.CoreV1().Services(svc.Namespace).Update(svc)
 	if err != nil {
-		return fmt.Errorf("could not update service: %w", err)
+		return err
 	}
 	logger.Debugf("service has been updated")
 
@@ -147,11 +148,25 @@ func (s Service) DeleteService(_ context.Context, ns, name string) error {
 
 	err := s.coreCli.CoreV1().Services(ns).Delete(name, &metav1.DeleteOptions{})
 	if err != nil {
-		return fmt.Errorf("could not delete service: %w", err)
+		return err
 	}
 
 	logger.Debugf("service has been deleted")
 	return nil
+}
+
+// GetSecret satisfies dex.KubernetesRepository interface.
+func (s Service) GetSecret(_ context.Context, ns, name string) (*corev1.Secret, error) {
+	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
+
+	secret, err := s.coreCli.CoreV1().Secrets(ns).Get(name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Debugf("secret retrieved")
+
+	return secret, nil
 }
 
 // EnsureSecret satisifes oauth2proxy.KubernetesRepository interface.
@@ -161,11 +176,11 @@ func (s Service) EnsureSecret(_ context.Context, secret *corev1.Secret) error {
 	storedSecret, err := s.coreCli.CoreV1().Secrets(secret.Namespace).Get(secret.Name, metav1.GetOptions{})
 	if err != nil {
 		if !kubeerrors.IsNotFound(err) {
-			return fmt.Errorf("could not get secret: %w", err)
+			return err
 		}
 		_, err = s.coreCli.CoreV1().Secrets(secret.Namespace).Create(secret)
 		if err != nil {
-			return fmt.Errorf("could not create secret: %w", err)
+			return err
 		}
 		logger.Debugf("secret has been created")
 
@@ -176,7 +191,7 @@ func (s Service) EnsureSecret(_ context.Context, secret *corev1.Secret) error {
 	secret.ObjectMeta.ResourceVersion = storedSecret.ResourceVersion
 	_, err = s.coreCli.CoreV1().Secrets(secret.Namespace).Update(secret)
 	if err != nil {
-		return fmt.Errorf("could not update secrets: %w", err)
+		return err
 	}
 	logger.Debugf("secret has been updated")
 
@@ -189,7 +204,7 @@ func (s Service) DeleteSecret(_ context.Context, ns, name string) error {
 
 	err := s.coreCli.CoreV1().Secrets(ns).Delete(name, &metav1.DeleteOptions{})
 	if err != nil {
-		return fmt.Errorf("could not delete secret: %w", err)
+		return err
 	}
 
 	logger.Debugf("secret has been deleted")
@@ -197,12 +212,12 @@ func (s Service) DeleteSecret(_ context.Context, ns, name string) error {
 }
 
 // GetIngress satisfies oauth2proxy.KubernetesRepository interface.
-func (s Service) GetIngress(ctx context.Context, ns, name string) (*networkingv1beta1.Ingress, error) {
+func (s Service) GetIngress(_ context.Context, ns, name string) (*networkingv1beta1.Ingress, error) {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
 
 	ing, err := s.coreCli.NetworkingV1beta1().Ingresses(ns).Get(name, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("could not retrieve ingress from Kubernetes: %w", err)
+		return nil, err
 	}
 
 	logger.Debugf("ingress got")
@@ -211,12 +226,12 @@ func (s Service) GetIngress(ctx context.Context, ns, name string) (*networkingv1
 }
 
 // UpdateIngress satisfies oauth2proxy.KubernetesRepository interface.
-func (s Service) UpdateIngress(ctx context.Context, ingress *networkingv1beta1.Ingress) error {
+func (s Service) UpdateIngress(_ context.Context, ingress *networkingv1beta1.Ingress) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ingress.Namespace, "obj-name": ingress.Name})
 
 	_, err := s.coreCli.NetworkingV1beta1().Ingresses(ingress.Namespace).Update(ingress)
 	if err != nil {
-		return fmt.Errorf("could not update ingress in Kubernetes: %w", err)
+		return err
 	}
 
 	logger.Debugf("ingress updated")
@@ -232,14 +247,14 @@ func (s Service) ListIngresses(_ context.Context, ns string, labelSelector map[s
 }
 
 // WatchIngresses satisfies controller.IngressControllerKubeService interface.
-func (s Service) WatchIngresses(ctx context.Context, ns string, labelSelector map[string]string) (watch.Interface, error) {
+func (s Service) WatchIngresses(_ context.Context, ns string, labelSelector map[string]string) (watch.Interface, error) {
 	return s.coreCli.NetworkingV1beta1().Ingresses(ns).Watch(metav1.ListOptions{
 		LabelSelector: labels.Set(labelSelector).String(),
 	})
 }
 
 // GetServiceHostAndPort satisifies security.KubeServiceTranslator interface.
-func (s Service) GetServiceHostAndPort(ctx context.Context, svc model.KubernetesService) (string, int, error) {
+func (s Service) GetServiceHostAndPort(_ context.Context, svc model.KubernetesService) (string, int, error) {
 	host := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
 	port, err := strconv.Atoi(svc.PortOrPortName)
 	if err == nil {
@@ -250,7 +265,7 @@ func (s Service) GetServiceHostAndPort(ctx context.Context, svc model.Kubernetes
 	// TODO(slok): Should we optimize with DNS SRV resolution although is worse for development? make it optional?.
 	service, err := s.coreCli.CoreV1().Services(svc.Namespace).Get(svc.Name, metav1.GetOptions{})
 	if err != nil {
-		return "", 0, fmt.Errorf("could not get Kubernetes service %s/%s: %w", svc.Namespace, svc.Name, err)
+		return "", 0, err
 	}
 
 	for _, port := range service.Spec.Ports {
@@ -268,4 +283,5 @@ var (
 	_ security.KubeServiceTranslator   = Service{}
 	_ oauth2proxy.KubernetesRepository = Service{}
 	_ controller.KubernetesRepository  = Service{}
+	_ dex.KubernetesRepository         = Service{}
 )
