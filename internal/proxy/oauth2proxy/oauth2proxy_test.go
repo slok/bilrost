@@ -25,8 +25,8 @@ func getBaseSettings() proxy.OIDCProxySettings {
 		URL:              "https://my-app.my-cluster.dev",
 		UpstreamURL:      "http://my-app.my-ns.svc.cluster.local:8080",
 		IssuerURL:        "https://dex.my-cluster.dev",
-		AppID:            "my-app-bilrost",
-		AppSecret:        "my-secret",
+		ClientID:         "my-app-bilrost",
+		ClientSecret:     "my-secret",
 		Scopes:           []string{"openid", "email", "profile", "groups", "offline_access"},
 		IngressNamespace: "my-ns",
 		IngressName:      "my-app",
@@ -60,7 +60,7 @@ func getBaseDeployment() *appsv1.Deployment {
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
-						corev1.Container{
+						{
 							Name:  "app",
 							Image: "quay.io/oauth2-proxy/oauth2-proxy:v5.1.0",
 							Args: []string{
@@ -78,7 +78,7 @@ func getBaseDeployment() *appsv1.Deployment {
 								`--email-domain=*`,
 							},
 							Ports: []corev1.ContainerPort{
-								corev1.ContainerPort{
+								{
 									ContainerPort: 4180,
 									Name:          "http",
 									Protocol:      "TCP",
@@ -109,7 +109,7 @@ func getBaseService() *corev1.Service {
 			Type:     "ClusterIP",
 			Selector: baseLabels,
 			Ports: []corev1.ServicePort{
-				corev1.ServicePort{
+				{
 					Port:       80,
 					Name:       "http",
 					TargetPort: intstr.FromInt(4180),

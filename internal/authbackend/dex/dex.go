@@ -30,12 +30,12 @@ func NewAppRegisterer(cli Client, logger log.Logger) authbackend.AppRegisterer {
 	}
 }
 
-func (a appRegisterer) RegisterApp(ctx context.Context, app authbackend.OIDCApp) error {
+func (a appRegisterer) RegisterApp(ctx context.Context, app authbackend.OIDCApp) (*authbackend.OIDCAppRegistryData, error) {
 	req := &dexapi.CreateClientReq{
 		Client: &dexapi.Client{
 			Id:     app.ID,
 			Name:   app.Name,
-			Secret: app.Secret,
+			Secret: "TODO",
 			RedirectUris: []string{
 				app.CallBackURL,
 			},
@@ -43,13 +43,16 @@ func (a appRegisterer) RegisterApp(ctx context.Context, app authbackend.OIDCApp)
 	}
 	_, err := a.cli.CreateClient(ctx, req)
 	if err != nil {
-		return fmt.Errorf("could not register application on Dex: %w", err)
+		return nil, fmt.Errorf("could not register application on Dex: %w", err)
 	}
 
 	a.logger.WithKV(log.KV{"app": app.Name, "callbackURL": app.CallBackURL}).
 		Infof("app registered as a client on Dex backend")
 
-	return nil
+	return &authbackend.OIDCAppRegistryData{
+		ClientID:     req.Client.Id,
+		ClientSecret: req.Client.Secret,
+	}, nil
 }
 func (a appRegisterer) UnregisterApp(ctx context.Context, appID string) error {
 	req := &dexapi.DeleteClientReq{Id: appID}

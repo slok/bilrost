@@ -115,9 +115,8 @@ func (s service) SecureApp(ctx context.Context, app model.App) error {
 		ID:          app.ID,
 		Name:        app.ID,
 		CallBackURL: fmt.Sprintf("https://%s/oauth2/callback", app.Host), // TODO(slok): Configurable based on the proxy.
-		Secret:      "TODO",                                              // TODO(slok): Need a way of setting a proper secret.
 	}
-	err = abReg.RegisterApp(ctx, oa)
+	oaRes, err := abReg.RegisterApp(ctx, oa)
 	if err != nil {
 		return fmt.Errorf("could not register oauth application on backend: %w", err)
 	}
@@ -154,8 +153,8 @@ func (s service) SecureApp(ctx context.Context, app model.App) error {
 		// TODO(slok): Is always http? https?
 		UpstreamURL:      fmt.Sprintf("http://%s:%d", host, port),
 		IssuerURL:        abPublicURL,
-		AppID:            oa.ID,
-		AppSecret:        oa.Secret,
+		ClientID:         oaRes.ClientID,
+		ClientSecret:     oaRes.ClientSecret,
 		IngressName:      app.Ingress.Name,
 		IngressNamespace: app.Ingress.Namespace,
 	}

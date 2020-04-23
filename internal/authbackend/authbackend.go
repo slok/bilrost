@@ -11,12 +11,18 @@ type OIDCApp struct {
 	ID          string
 	Name        string
 	CallBackURL string
-	Secret      string
+}
+
+// OIDCAppRegistryData is extra information that the user can use to communicate with the
+// auth backend.
+type OIDCAppRegistryData struct {
+	ClientID     string
+	ClientSecret string
 }
 
 // AppRegisterer knows how to register OIDC apps on backends.
 type AppRegisterer interface {
-	RegisterApp(ctx context.Context, app OIDCApp) error
+	RegisterApp(ctx context.Context, app OIDCApp) (*OIDCAppRegistryData, error)
 	UnregisterApp(ctx context.Context, appID string) error
 }
 

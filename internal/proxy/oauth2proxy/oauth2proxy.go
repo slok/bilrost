@@ -106,9 +106,9 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 							Image: "quay.io/oauth2-proxy/oauth2-proxy:v5.1.0",
 							Args: []string{
 								fmt.Sprintf(`--oidc-issuer-url=%s`, settings.IssuerURL),
-								fmt.Sprintf(`--client-id=%s`, settings.AppID),
+								fmt.Sprintf(`--client-id=%s`, settings.ClientID),
 								// TODO(slok): Create asecret and inject as env var.
-								fmt.Sprintf(`--client-secret=%s`, settings.AppSecret),
+								fmt.Sprintf(`--client-secret=%s`, settings.ClientSecret),
 								fmt.Sprintf(`--http-address=0.0.0.0:%d`, proxyInternalPort),
 								fmt.Sprintf(`--redirect-url=%s/oauth2/callback`, settings.URL),
 								fmt.Sprintf(`--upstream=%s`, settings.UpstreamURL),
