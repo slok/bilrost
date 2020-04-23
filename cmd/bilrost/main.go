@@ -59,9 +59,9 @@ func Run() error {
 
 	// Create services.
 	kubeSvc := kubernetes.NewService(kCoreCli, kBilrostCli, logger)
-	authBackFactory := authbackendfactory.NewFactory(logger)
 	proxyProvisioner := oauth2proxy.NewOIDCProvisioner(kubeSvc, logger)
 	backupSvc := backup.NewIngressBackupper(kubeSvc, logger)
+	authBackFactory := authbackendfactory.NewFactory(cmdCfg.NamespaceRunning, kubeSvc, logger)
 	secSvc, err := security.NewService(security.ServiceConfig{
 		Backupper:              backupSvc,
 		ServiceTranslator:      kubeSvc,
@@ -112,7 +112,7 @@ func Run() error {
 
 		ctrl, err := koopercontroller.New(&koopercontroller.Config{
 			Handler:              handler,
-			Retriever:            controller.NewRetriever(cmdCfg.Namespace, kubeSvc),
+			Retriever:            controller.NewRetriever(cmdCfg.NamespaceFilter, kubeSvc),
 			Logger:               kooperLogger,
 			Name:                 "security-controller",
 			ConcurrentWorkers:    cmdCfg.Workers,
