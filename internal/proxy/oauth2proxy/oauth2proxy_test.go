@@ -65,8 +65,8 @@ func getBaseDeployment() *appsv1.Deployment {
 							Image: "quay.io/oauth2-proxy/oauth2-proxy:v5.1.0",
 							Args: []string{
 								"--oidc-issuer-url=https://dex.my-cluster.dev",
-								"--client-id=my-app-bilrost",
-								"--client-secret=my-secret",
+								"--client-id=$(OIDC_CLIENT_ID)",
+								"--client-secret=$(OIDC_CLIENT_SECRET)",
 								"--http-address=0.0.0.0:4180",
 								"--redirect-url=https://my-app.my-cluster.dev/oauth2/callback",
 								"--upstream=http://my-app.my-ns.svc.cluster.local:8080",
@@ -90,6 +90,13 @@ func getBaseDeployment() *appsv1.Deployment {
 									corev1.ResourceMemory: resource.MustParse("20Mi"),
 								},
 							},
+							EnvFrom: []corev1.EnvFromSource{{
+								SecretRef: &corev1.SecretEnvSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: "my-app-bilrost-proxy",
+									},
+								},
+							}},
 						},
 					},
 				},
@@ -115,6 +122,21 @@ func getBaseService() *corev1.Service {
 					TargetPort: intstr.FromInt(4180),
 				},
 			},
+		},
+	}
+}
+
+func getBaseSecret() *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "my-app-bilrost-proxy",
+			Namespace: "my-ns",
+			Labels:    baseLabels,
+		},
+		Type: corev1.SecretTypeOpaque,
+		StringData: map[string]string{
+			"OIDC_CLIENT_ID":     "my-app-bilrost",
+			"OIDC_CLIENT_SECRET": "my-secret",
 		},
 	}
 }
@@ -154,12 +176,14 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 		mock     func(m *oauth2proxymock.KubernetesRepository)
 		expErr   bool
 	}{
-		"A correct proxy provisioning should provision a deployment, a service, and swap the ingres.": {
+		"A correct proxy provisioning should provision a secret, a deployment, a service, and swap the ingres.": {
 			settings: getBaseSettings,
 			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				expSec := getBaseSecret()
 				expDep := getBaseDeployment()
 				expSvc := getBaseService()
 
+				m.On("EnsureSecret", mock.Anything, expSec).Once().Return(nil)
 				m.On("EnsureDeployment", mock.Anything, expDep).Once().Return(nil)
 				m.On("EnsureService", mock.Anything, expSvc).Once().Return(nil)
 
@@ -178,9 +202,11 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 		"If stored ingress already has been swapped, it shouldn't be updated.": {
 			settings: getBaseSettings,
 			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				expSec := getBaseSecret()
 				expDep := getBaseDeployment()
 				expSvc := getBaseService()
 
+				m.On("EnsureSecret", mock.Anything, expSec).Once().Return(nil)
 				m.On("EnsureDeployment", mock.Anything, expDep).Once().Return(nil)
 				m.On("EnsureService", mock.Anything, expSvc).Once().Return(nil)
 
@@ -193,9 +219,18 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 			},
 		},
 
+		"Failing setting up the secret should stop the provision process.": {
+			settings: getBaseSettings,
+			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				m.On("EnsureSecret", mock.Anything, mock.Anything).Once().Return(fmt.Errorf("wanted error"))
+			},
+			expErr: true,
+		},
+
 		"Failing setting up the deployment should stop the provision process.": {
 			settings: getBaseSettings,
 			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				m.On("EnsureSecret", mock.Anything, mock.Anything).Once().Return(nil)
 				m.On("EnsureDeployment", mock.Anything, mock.Anything).Once().Return(fmt.Errorf("wanted error"))
 			},
 			expErr: true,
@@ -204,6 +239,7 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 		"Failing setting up the service should stop the provision process.": {
 			settings: getBaseSettings,
 			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				m.On("EnsureSecret", mock.Anything, mock.Anything).Once().Return(nil)
 				m.On("EnsureDeployment", mock.Anything, mock.Anything).Once().Return(nil)
 				m.On("EnsureService", mock.Anything, mock.Anything).Once().Return(fmt.Errorf("wanted error"))
 			},
@@ -213,6 +249,7 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 		"Failing getting the original ingress should stop the provision process.": {
 			settings: getBaseSettings,
 			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				m.On("EnsureSecret", mock.Anything, mock.Anything).Once().Return(nil)
 				m.On("EnsureDeployment", mock.Anything, mock.Anything).Once().Return(nil)
 				m.On("EnsureService", mock.Anything, mock.Anything).Once().Return(nil)
 				m.On("GetIngress", mock.Anything, mock.Anything, mock.Anything).Once().Return(nil, fmt.Errorf("wanted error"))
@@ -223,6 +260,7 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 		"Failing updating app ingress should stop the provision process.": {
 			settings: getBaseSettings,
 			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				m.On("EnsureSecret", mock.Anything, mock.Anything).Once().Return(nil)
 				m.On("EnsureDeployment", mock.Anything, mock.Anything).Once().Return(nil)
 				m.On("EnsureService", mock.Anything, mock.Anything).Once().Return(nil)
 				m.On("GetIngress", mock.Anything, mock.Anything, mock.Anything).Once().Return(getBaseIngress(), nil)
@@ -280,6 +318,7 @@ func TestOIDCProvisionerUnprovision(t *testing.T) {
 				m.On("UpdateIngress", context.TODO(), expIngress).Once().Return(nil)
 				m.On("DeleteService", context.TODO(), "test-ns", "test-bilrost-proxy").Once().Return(nil)
 				m.On("DeleteDeployment", context.TODO(), "test-ns", "test-bilrost-proxy").Once().Return(nil)
+				m.On("DeleteSecret", context.TODO(), "test-ns", "test-bilrost-proxy").Once().Return(nil)
 			},
 		},
 
@@ -294,6 +333,7 @@ func TestOIDCProvisionerUnprovision(t *testing.T) {
 				m.On("GetIngress", context.TODO(), "test-ns", "test").Once().Return(storedIng, nil)
 				m.On("DeleteService", context.TODO(), "test-ns", "test-bilrost-proxy").Once().Return(nil)
 				m.On("DeleteDeployment", context.TODO(), "test-ns", "test-bilrost-proxy").Once().Return(nil)
+				m.On("DeleteSecret", context.TODO(), "test-ns", "test-bilrost-proxy").Once().Return(nil)
 			},
 		},
 
@@ -331,6 +371,18 @@ func TestOIDCProvisionerUnprovision(t *testing.T) {
 				m.On("UpdateIngress", context.TODO(), mock.Anything).Once().Return(nil)
 				m.On("DeleteService", context.TODO(), mock.Anything, mock.Anything).Once().Return(nil)
 				m.On("DeleteDeployment", context.TODO(), mock.Anything, mock.Anything).Once().Return(fmt.Errorf("wanted error"))
+			},
+			expErr: true,
+		},
+
+		"Failing deleting the proxy secret should stop the process.": {
+			settings: getBaseUnprovisionSettings,
+			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				m.On("GetIngress", context.TODO(), mock.Anything, mock.Anything).Once().Return(getBaseIngress(), nil)
+				m.On("UpdateIngress", context.TODO(), mock.Anything).Once().Return(nil)
+				m.On("DeleteService", context.TODO(), mock.Anything, mock.Anything).Once().Return(nil)
+				m.On("DeleteDeployment", context.TODO(), mock.Anything, mock.Anything).Once().Return(nil)
+				m.On("DeleteSecret", context.TODO(), mock.Anything, mock.Anything).Once().Return(fmt.Errorf("wanted error"))
 			},
 			expErr: true,
 		},

@@ -154,6 +154,48 @@ func (s Service) DeleteService(_ context.Context, ns, name string) error {
 	return nil
 }
 
+// EnsureSecret satisifes oauth2proxy.KubernetesRepository interface.
+func (s Service) EnsureSecret(_ context.Context, secret *corev1.Secret) error {
+	logger := s.logger.WithKV(log.KV{"obj-ns": secret.Namespace, "obj-name": secret.Name})
+
+	storedSecret, err := s.coreCli.CoreV1().Secrets(secret.Namespace).Get(secret.Name, metav1.GetOptions{})
+	if err != nil {
+		if !kubeerrors.IsNotFound(err) {
+			return fmt.Errorf("could not get secret: %w", err)
+		}
+		_, err = s.coreCli.CoreV1().Secrets(secret.Namespace).Create(secret)
+		if err != nil {
+			return fmt.Errorf("could not create secret: %w", err)
+		}
+		logger.Debugf("secret has been created")
+
+		return nil
+	}
+
+	// Force overwrite.
+	secret.ObjectMeta.ResourceVersion = storedSecret.ResourceVersion
+	_, err = s.coreCli.CoreV1().Secrets(secret.Namespace).Update(secret)
+	if err != nil {
+		return fmt.Errorf("could not update secrets: %w", err)
+	}
+	logger.Debugf("secret has been updated")
+
+	return nil
+}
+
+// DeleteSecret satisfies oauth2proxy.KubernetesRepository interface.
+func (s Service) DeleteSecret(_ context.Context, ns, name string) error {
+	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
+
+	err := s.coreCli.CoreV1().Secrets(ns).Delete(name, &metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("could not delete secret: %w", err)
+	}
+
+	logger.Debugf("secret has been deleted")
+	return nil
+}
+
 // GetIngress satisfies oauth2proxy.KubernetesRepository interface.
 func (s Service) GetIngress(ctx context.Context, ns, name string) (*networkingv1beta1.Ingress, error) {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
