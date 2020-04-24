@@ -4,12 +4,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/slok/bilrost/internal/metrics"
-	"github.com/slok/bilrost/internal/model"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	"k8s.io/apimachinery/pkg/watch"
+
+	"github.com/slok/bilrost/internal/metrics"
+	"github.com/slok/bilrost/internal/model"
 )
 
 // MeasuredService is like Service but measuring with a metrics.Recorder

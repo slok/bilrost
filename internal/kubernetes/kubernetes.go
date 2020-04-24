@@ -278,11 +278,11 @@ func (s Service) GetServiceHostAndPort(_ context.Context, svc model.KubernetesSe
 }
 
 // checkInterface, is a custom internal type that has all the interfaces that our kubernetes.Service must satisfy
-// we could do `var _ {MUST_IMPLEMENT_INTERFACE} = Service{}` for each of the interfaces, but this way we could
-// do wrappers of `kubernetes.Service` that satisify this aggregated interface instead of
-// declaring explicitly in all of them what are the interfaces that must implement.
+// we could do `var _ {MUST_IMPLEMENT_INTERFACE} = Service{}` for each of the interfaces, but this aggregated way
+// we could do wrappers of `kubernetes.Service` that satisify this aggregated interface instead of declaring
+// explicitly in all of them what are the interfaces that must implement.
 // The use case can be seen on `metrics.go` in this same package.
-// Rrquires Go 1.14 because: https://github.com/golang/go/issues/6977
+// Requires Go 1.14 because of overlapped interfaces: https://github.com/golang/go/issues/6977
 type checkInterface interface {
 	security.AuthBackendRepository
 	security.KubeServiceTranslator

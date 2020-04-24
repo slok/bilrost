@@ -12,16 +12,8 @@ import (
 	"github.com/slok/bilrost/internal/metrics"
 )
 
-// internal type that we make this for two reasons:
-// - Avoid collisions when embedding types, this could happen in
-// 	 case we embed another interface called `MetricsRecorder`.
-// - The external type would be public but we want to be internal
-//    to this package.
-type kooperRecorder koopercontroller.MetricsRecorder
-
-// recorder knows how to record prometheus metrics in the application.
 type recorder struct {
-	kooperRecorder
+	koopercontroller.MetricsRecorder
 
 	dexCliOpDuration          *prometheus.HistogramVec
 	oidcProxyProvOpDuration   *prometheus.HistogramVec
@@ -30,7 +22,8 @@ type recorder struct {
 	k8sServiceOpDuration      *prometheus.HistogramVec
 }
 
-// NewRecorder returns a new Prometheus recorder.
+// NewRecorder returns a new metrics.Recorder that knows how
+// to record metrics on a Prometheus backend.
 func NewRecorder(reg prometheus.Registerer) metrics.Recorder {
 	const (
 		promNamespace               = "bilrost"
@@ -42,7 +35,7 @@ func NewRecorder(reg prometheus.Registerer) metrics.Recorder {
 	)
 
 	r := recorder{
-		kooperRecorder: kooperprometheus.New(kooperprometheus.Config{
+		MetricsRecorder: kooperprometheus.New(kooperprometheus.Config{
 			Registerer: reg,
 		}),
 
@@ -51,7 +44,6 @@ func NewRecorder(reg prometheus.Registerer) metrics.Recorder {
 			Subsystem: promDexCliSubsystem,
 			Name:      "operation_duration_seconds",
 			Help:      "The duration for an Dex client operation in the dex auth backend.",
-			Buckets:   prometheus.DefBuckets,
 		}, []string{"operation", "success"}),
 
 		oidcProxyProvOpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -59,7 +51,6 @@ func NewRecorder(reg prometheus.Registerer) metrics.Recorder {
 			Subsystem: promProxyProvSubsystem,
 			Name:      "operation_duration_seconds",
 			Help:      "The duration for an OIDC proxy provisioner operation.",
-			Buckets:   prometheus.DefBuckets,
 		}, []string{"provisioner", "operation", "success"}),
 
 		authBackAppRegOpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -67,7 +58,6 @@ func NewRecorder(reg prometheus.Registerer) metrics.Recorder {
 			Subsystem: promAuthBackAppRegSubsystem,
 			Name:      "operation_duration_seconds",
 			Help:      "The duration for an auth backend app registerer operation.",
-			Buckets:   prometheus.DefBuckets,
 		}, []string{"app_registerer", "operation", "success"}),
 
 		backupBackupperOpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -75,7 +65,6 @@ func NewRecorder(reg prometheus.Registerer) metrics.Recorder {
 			Subsystem: promBackupperSubsystem,
 			Name:      "operation_duration_seconds",
 			Help:      "The duration for a backup backupper operation.",
-			Buckets:   prometheus.DefBuckets,
 		}, []string{"backupper", "operation", "success"}),
 
 		k8sServiceOpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -83,7 +72,6 @@ func NewRecorder(reg prometheus.Registerer) metrics.Recorder {
 			Subsystem: promKubernetesSvcSubsystem,
 			Name:      "operation_duration_seconds",
 			Help:      "The duration for a kubernetes service operation.",
-			Buckets:   prometheus.DefBuckets,
 		}, []string{"namespace", "operation", "success"}),
 	}
 
@@ -119,7 +107,7 @@ func (r recorder) ObserveBackupBackupperOperation(_ context.Context, backupperTy
 		Observe(time.Since(startAt).Seconds())
 }
 
-func (r recorder) ObserveKubernetesServiceOperation(ctx context.Context, namespace, op string, success bool, startAt time.Time) {
+func (r recorder) ObserveKubernetesServiceOperation(_ context.Context, namespace, op string, success bool, startAt time.Time) {
 	r.k8sServiceOpDuration.WithLabelValues(namespace, op, strconv.FormatBool(success)).
 		Observe(time.Since(startAt).Seconds())
 }
