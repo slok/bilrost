@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/oklog/run"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	koopercontroller "github.com/spotahome/kooper/controller"
 	kooperlog "github.com/spotahome/kooper/log/logrus"
@@ -21,6 +24,8 @@ import (
 	"github.com/slok/bilrost/internal/kubernetes"
 	kubernetesclient "github.com/slok/bilrost/internal/kubernetes/client"
 	"github.com/slok/bilrost/internal/log"
+	bilrostprometheus "github.com/slok/bilrost/internal/metrics/prometheus"
+	"github.com/slok/bilrost/internal/proxy"
 	"github.com/slok/bilrost/internal/proxy/oauth2proxy"
 	"github.com/slok/bilrost/internal/security"
 )
@@ -57,11 +62,15 @@ func Run() error {
 		return fmt.Errorf("could not create K8S core client: %w", err)
 	}
 
-	// Create services.
-	kubeSvc := kubernetes.NewService(kCoreCli, kBilrostCli, logger)
-	proxyProvisioner := oauth2proxy.NewOIDCProvisioner(kubeSvc, logger)
-	backupSvc := backup.NewIngressBackupper(kubeSvc, logger)
-	authBackFactory := authbackendfactory.NewFactory(cmdCfg.NamespaceRunning, kubeSvc, logger)
+	// Create main dependencies.
+	metricsRecorder := bilrostprometheus.NewRecorder(prometheus.DefaultRegisterer)
+	kubeSvc := kubernetes.NewMeasuredService(metricsRecorder, kubernetes.NewService(kCoreCli, kBilrostCli, logger))
+	proxyProvisioner := proxy.NewMeasuredOIDCProvisioner(
+		"oauth2proxy",
+		metricsRecorder,
+		oauth2proxy.NewOIDCProvisioner(kubeSvc, logger))
+	backupSvc := backup.NewMeasuredbackupper("ingress", metricsRecorder, backup.NewIngressBackupper(kubeSvc, logger))
+	authBackFactory := authbackendfactory.NewFactory(cmdCfg.NamespaceRunning, metricsRecorder, kubeSvc, logger)
 	secSvc, err := security.NewService(security.ServiceConfig{
 		Backupper:              backupSvc,
 		ServiceTranslator:      kubeSvc,
@@ -76,6 +85,30 @@ func Run() error {
 
 	// Prepare our run entrypoints.
 	var g run.Group
+
+	// Serving Prometheus metrics.
+	{
+		// We use prometheus global registry.
+		mux := http.NewServeMux()
+		mux.Handle(cmdCfg.MetricsPath, promhttp.Handler())
+		server := &http.Server{
+			Addr:    cmdCfg.MetricsAddr,
+			Handler: mux,
+		}
+
+		g.Add(
+			func() error {
+				logger.WithKV(log.KV{"addr": cmdCfg.MetricsAddr, "path": cmdCfg.MetricsPath}).Infof("prometheus metrics server listening for requests")
+				return server.ListenAndServe()
+			},
+			func(_ error) {
+				err := server.Shutdown(context.Background())
+				if err != nil {
+					logger.Errorf("error shutting down metrics server: %w", err)
+				}
+			},
+		)
+	}
 
 	// OS signals.
 	{
@@ -113,8 +146,9 @@ func Run() error {
 		ctrl, err := koopercontroller.New(&koopercontroller.Config{
 			Handler:              handler,
 			Retriever:            controller.NewRetriever(cmdCfg.NamespaceFilter, kubeSvc),
+			MetricsRecorder:      metricsRecorder,
 			Logger:               kooperLogger,
-			Name:                 "security-controller",
+			Name:                 "bilrost-controller",
 			ConcurrentWorkers:    cmdCfg.Workers,
 			ProcessingJobRetries: 2,
 		})
