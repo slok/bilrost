@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	dexapi "github.com/dexidp/dex/api"
+	"google.golang.org/grpc"
 	corev1 "k8s.io/api/core/v1"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,7 +20,8 @@ import (
 
 // Client is the dex client interface.
 type Client interface {
-	dexapi.DexClient
+	CreateClient(ctx context.Context, in *dexapi.CreateClientReq, opts ...grpc.CallOption) (*dexapi.CreateClientResp, error)
+	DeleteClient(ctx context.Context, in *dexapi.DeleteClientReq, opts ...grpc.CallOption) (*dexapi.DeleteClientResp, error)
 }
 
 //go:generate mockery -case underscore -output dexmock -outpkg dexmock -name Client
