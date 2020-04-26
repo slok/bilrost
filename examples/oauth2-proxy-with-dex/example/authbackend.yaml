@@ -1,0 +1,12 @@
+apiVersion: auth.bilrost.slok.dev/v1
+kind: AuthBackend
+metadata:
+  name: test-bilrost-dex
+  labels:
+    backend-kind: dex
+spec:
+  dex:
+    publicURL: CHANGE_ME_PUBLIC_DEX_URL # e.g https://dex.my.cluster.slok.dev
+    # For local development you can use localhost and `kubectl -n test-bilrost port-forward svc/dex 8080:81`
+    #apiAddress: localhost:8080
+    apiAddress: dex.test-bilrost.svc.cluster.local:81
