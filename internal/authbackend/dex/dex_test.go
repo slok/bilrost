@@ -36,7 +36,7 @@ func getBaseConfig() dex.AppRegistererConfig {
 func getBaseSecret() *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "bilrost-dex-client-ehin6t1dd5i0",
+			Name:      "bilrost-dex-cli-361dc45aacd2d2a1961554d12a2d666b",
 			Namespace: "test-ns",
 			Annotations: map[string]string{
 				"bilrost.slok.dev/dex-client-id": "test-id",
@@ -45,7 +45,7 @@ func getBaseSecret() *corev1.Secret {
 				"app.kubernetes.io/managed-by": "bilrost",
 				"app.kubernetes.io/name":       "bilrost",
 				"app.kubernetes.io/component":  "dex-client-data",
-				"app.kubernetes.io/instance":   "bilrost-dex-client-ehin6t1dd5i0",
+				"app.kubernetes.io/instance":   "bilrost-dex-cli-361dc45aacd2d2a1961554d12a2d666b",
 			},
 		},
 		Type: corev1.SecretTypeOpaque,
@@ -123,7 +123,7 @@ func TestRegisterApp(t *testing.T) {
 			mock: func(c *dexmock.Client, k *dexmock.KubernetesRepository) {
 				// Ask for the secret on Kubernetes.
 				expErr := &kubeerrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonNotFound}}
-				k.On("GetSecret", mock.Anything, "test-ns", "bilrost-dex-client-ehin6t1dd5i0").Once().Return(nil, expErr)
+				k.On("GetSecret", mock.Anything, "test-ns", "bilrost-dex-cli-361dc45aacd2d2a1961554d12a2d666b").Once().Return(nil, expErr)
 
 				// No secret, should create a new one using our generator.
 				expSecret := getBaseSecret()
@@ -144,7 +144,7 @@ func TestRegisterApp(t *testing.T) {
 				// Ask for the secret on Kubernetes.
 				expSecret := getBaseSecret()
 				expSecret.Data["clientSecret"] = []byte("old-secret")
-				k.On("GetSecret", mock.Anything, "test-ns", "bilrost-dex-client-ehin6t1dd5i0").Once().Return(expSecret, nil)
+				k.On("GetSecret", mock.Anything, "test-ns", "bilrost-dex-cli-361dc45aacd2d2a1961554d12a2d666b").Once().Return(expSecret, nil)
 
 				expReq := getBaseDexCreateRequest()
 				expReq.Client.Secret = "old-secret"
@@ -164,7 +164,7 @@ func TestRegisterApp(t *testing.T) {
 				// Ask for the secret on Kubernetes.
 				storedSecret := getBaseSecret()
 				storedSecret.Data["clientSecret"] = []byte("") // Force creation.
-				k.On("GetSecret", mock.Anything, "test-ns", "bilrost-dex-client-ehin6t1dd5i0").Once().Return(storedSecret, nil)
+				k.On("GetSecret", mock.Anything, "test-ns", "bilrost-dex-cli-361dc45aacd2d2a1961554d12a2d666b").Once().Return(storedSecret, nil)
 
 				// Empty secret, should create a new one using our generator.
 				expSecret := getBaseSecret()
@@ -238,7 +238,7 @@ func TestUnregisterApp(t *testing.T) {
 			mock: func(c *dexmock.Client, k *dexmock.KubernetesRepository) {
 				expReq := &dexapi.DeleteClientReq{Id: "test-id"}
 				c.On("DeleteClient", mock.Anything, expReq).Once().Return(nil, nil)
-				k.On("DeleteSecret", mock.Anything, "test-ns", "bilrost-dex-client-ehin6t1dd5i0").Once().Return(nil)
+				k.On("DeleteSecret", mock.Anything, "test-ns", "bilrost-dex-cli-361dc45aacd2d2a1961554d12a2d666b").Once().Return(nil)
 			},
 		},
 	}
