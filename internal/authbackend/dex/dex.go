@@ -2,11 +2,10 @@ package dex
 
 import (
 	"context"
+	"crypto/md5"
 	"crypto/rand"
-	"encoding/base32"
 	"encoding/base64"
 	"fmt"
-	"strings"
 
 	dexapi "github.com/dexidp/dex/api"
 	"google.golang.org/grpc"
@@ -233,6 +232,6 @@ func (a appRegisterer) UnregisterApp(ctx context.Context, appID string) error {
 }
 
 func getSecretName(id string) string {
-	b32ID := base32.HexEncoding.WithPadding(base32.NoPadding).EncodeToString([]byte(id))
-	return fmt.Sprintf("bilrost-dex-client-%s", strings.ToLower(b32ID))
+	checksum := md5.Sum([]byte(id))
+	return fmt.Sprintf("bilrost-dex-cli-%x", checksum)
 }
