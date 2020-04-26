@@ -1,10 +1,10 @@
 # Bilrost
 
-Setting OAUTH/OIDC on a application running in a Kubernetes cluster should be easy, Bilrost removes this pain.
+Setting OAUTH2/OIDC in Kubernetes running apps should be easy, Bilrost achieves this and removes the pain easily.
 
-Bilrost is a kubernetes controller/operator to set up oauth2/OIDC on any ingress based service. It doesn't care  what ingress controller do you use, supports multiple auth bakckends and multiple OAUTH/OIDC proxies.
+Bilrost is a kubernetes controller/operator to set up OAUTH2/OIDC on any ingress based service. It doesn't care  what ingress controller do you use, supports multiple auth bakckends and multiple OAUTH2/OIDC proxies.
 
-Bilrost will register/create OAUTH/OIDC clients, create secrets, setup proxies, rollback if required. Ina few words, it automates the ugly work of setting the OAUTH2/OIDC security in your applications.
+Bilrost will register/create OAUTH2/OIDC clients, create secrets, setup proxies, rollback if required. Ina few words, it automates the ugly work of setting the OAUTH2/OIDC security in your applications.
 
 ## Features
 
@@ -22,7 +22,7 @@ Bilrost will register/create OAUTH/OIDC clients, create secrets, setup proxies, 
   - Dex with Google for company internal backend ingresses.
   - Dex with other Google accounts to allow access to poeple outside the company internal backends.
 - Automatic registering OIDC clients on auth backends.
-- Automatically create OAUTH/OIDC client secrets (no need to be manipulating secrets).
+- Automatically create OAUTH2/OIDC client secrets (no need to be manipulating secrets).
 - Setup safe settings on proxies.
 - Splits responsibility about the auth backends and application security.
 
@@ -39,7 +39,7 @@ As you see, this way of splitting the concerns makes the applications being secu
 
 ![kubernetes-architecture](docs/img/k8s-architecture.png)
 
-As you see in the high level architecture graph, before Bilrost you have the regular setup of ingress->service->pods. After securing with Bilrost, this will set up a proxy in a kind of [MitM][mitm] style, so every request that forwards from the ingress to the service, will need to go through the OAUTH/OIDC proxy that has been configured and registered with an auth backend, so the OAUTH2/OIDC flow is triggered.
+As you see in the high level architecture graph, before Bilrost you have the regular setup of ingress->service->pods. After securing with Bilrost, this will set up a proxy in a kind of [MitM][mitm] style, so every request that forwards from the ingress to the service, will need to go through the OAUTH2/OIDC proxy that has been configured and registered with an auth backend, so the OAUTH2/OIDC flow is triggered.
 
 ## Getting started
 
@@ -57,14 +57,14 @@ First you need to register the dex as an auth backend for bilrost, using a clust
 apiVersion: auth.bilrost.slok.dev/v1
 kind: AuthBackend
 metadata:
-  name: dex
+  name: my-dex
 spec:
   dex:
     publicURL: https://dex.my.cluster.slok.dev
     apiAddress: dex.auth.svc.cluster.local:81
 ```
 
-Now you need to select this backend with Bilrost's ingress annotation and let the magic happen (this example is for an app available at `https://app.my.cluster.slok.dev` and a service at `app` at namespace `app`):
+Now you need to select this backend, we will use the simple way of using the Bilrost's ingress annotation (`auth.bilrost.slok.dev/backend`) and let the magic happen (this example is for an app available at `https://app.my.cluster.slok.dev` and a service `app`, namespace `app`):
 
 ```yaml
 apiVersion: extensions/v1beta1
@@ -73,7 +73,7 @@ metadata:
   name: app
   namespace: app
   annotations:
-    auth.bilrost.slok.dev/backend: test-bilrost-dex
+    auth.bilrost.slok.dev/backend: my-dex
 spec:
   rules:
     - host: app.my.cluster.slok.dev
@@ -86,13 +86,15 @@ spec:
 
 ```
 
-For more advanced examples check: [examples]
+## Advanced examples
+
+For more advanced examples check [examples] dir, be aware of the `CHANGE_ME` prefix on the lines that you will need to change/pay attention.
 
 ### Supported auth backends
 
-- [Dex]: Bilrost will use the API to register and unregister the secured clients automatically. 
+- [Dex]: Bilrost will use the API to register and unregister the secured clients automatically.
 
-### Supported OAUTH/OIDC Proxies
+### Supported OAUTH2/OIDC proxies
 
 - [oauth2-proxy]: Bilrost will create a deployment, service and secret, configure the proxy with OIDC settings for the auth backend and forwardthe ingress to the proxy instead the original app service.
 

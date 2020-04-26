@@ -6,7 +6,7 @@
 
 - Auth Backend CRD.
 - Secure using ingress based annotations.
-- Ouath2-proxy implementation as a secure proxy.
+- Oauth2-proxy implementation as a secure proxy.
 - Dex auth backend implementation.
 - Main application with a Kubernetes controller.
 - Prometheus metrics.
