@@ -138,9 +138,9 @@ metadata:
   namespace: test-bilrost
   labels:
     app: dex
-  annotations:
-    kubernetes.io/ingress.class: traefik
-    traefik.ingress.kubernetes.io/redirect-entry-point: https
+  #annotations:
+  #  CHANGE_ME_YOUR_INGRESS_CONTROLLER_ANNOTATIONS
+
 spec:
   rules:
     - host: CHANGE_ME_DEX_PUBLIC_HOST # e.g. dex.my.cluster.slok.dev

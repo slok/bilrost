@@ -52,9 +52,10 @@ metadata:
     app: kuard
   annotations:
     auth.bilrost.slok.dev/backend: test-bilrost-dex
+    #  CHANGE_ME_YOUR_INGRESS_CONTROLLER_ANNOTATIONS
 spec:
   rules:
-    - host: CHANGE_ME_ADD_APP_PUBLIC_HOST # e.g. kuard.my.cluster.slok.dev
+    - host: CHANGE_ME_APP_PUBLIC_HOST # e.g. kuard.my.cluster.slok.dev
       http:
         paths:
           - backend:
