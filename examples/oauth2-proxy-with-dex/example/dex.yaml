@@ -1,0 +1,152 @@
+#---
+## Only required if we don't already have this cluster role
+#apiVersion: rbac.authorization.k8s.io/v1                                                                                                                                                                             
+#kind: ClusterRole                                                                                                                                                                                                    
+#metadata:                                                                                                                                                                                                            
+#  name: dex                                                                                                                                                                                                          
+#rules:                                                                                                                                                                                                               
+#- apiGroups: ["dex.coreos.com"] # API group created by dex                                                
+#  resources: ["*"]                                
+#  verbs: ["*"]                                                                                            
+#- apiGroups: ["apiextensions.k8s.io"]             
+#  resources: ["customresourcedefinitions"]                                                                
+#  verbs: ["create"] # To manage its own resources identity must be able to create customresourcedefinitions.      
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dex
+  namespace: test-bilrost
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dex
+  namespace: test-bilrost
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dex
+subjects:
+  - kind: ServiceAccount
+    name: dex
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: dex
+  name: dex
+  namespace: test-bilrost
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dex
+  template:
+    metadata:
+      labels:
+        app: dex
+    spec:
+      serviceAccount: dex
+      containers:
+      - command:
+        - /usr/local/bin/dex
+        - serve
+        - /etc/dex/cfg/config.yaml
+        image: quay.io/dexidp/dex:v2.23.0
+        name: dex
+        ports:
+        - containerPort: 5556
+          name: http
+          protocol: TCP
+        - containerPort: 5557
+          name: api
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /etc/dex/cfg
+          name: config
+      restartPolicy: Always
+      volumes:
+      - configMap:
+          items:
+          - key: config.yaml
+            path: config.yaml
+          name: dex
+        name: config
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app: dex
+  name: dex
+  namespace: test-bilrost
+data:
+  config.yaml: |
+    issuer: CHANGE_ME_DEX_PUBLIC_URL # e.g. https://dex.my.cluster.slok.dev
+    storage:
+      type: kubernetes
+      config:
+        inCluster: true
+    web:
+      http: 0.0.0.0:5556
+    grpc:
+      addr: 0.0.0.0:5557
+      reflection: true
+    logger:
+      level: debug
+
+    connectors:
+    - type: mockCallback
+      id: mock
+      name: mock-example
+
+    oauth2:
+      skipApprovalScreen: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dex
+  namespace: test-bilrost
+  labels:
+    app: dex
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: http
+      name: http
+      protocol: TCP
+    - port: 81
+      targetPort: api
+      name: api
+      protocol: TCP
+  selector:
+    app: dex
+
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: dex
+  namespace: test-bilrost
+  labels:
+    app: dex
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+spec:
+  rules:
+    - host: CHANGE_ME_DEX_PUBLIC_HOST # e.g. dex.my.cluster.slok.dev
+      http:
+        paths:
+          - backend:
+              serviceName: dex
+              servicePort: 80
+            path: /

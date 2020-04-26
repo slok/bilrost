@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kuard
+  namespace: test-bilrost
+  labels:
+    app: kuard
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: kuard
+  template:
+    metadata:
+      labels:
+        app: kuard
+    spec:
+      containers:
+        - name: kuard
+          image: gcr.io/kuar-demo/kuard-amd64:1
+          args:
+            - "--address=:8080"
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kuard
+  namespace: test-bilrost
+  labels:
+    app: kuard
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: http
+      name: http
+      protocol: TCP
+  selector:
+    app: kuard
+
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: kuard
+  namespace: test-bilrost
+  labels:
+    app: kuard
+  annotations:
+    auth.bilrost.slok.dev/backend: test-bilrost-dex
+spec:
+  rules:
+    - host: CHANGE_ME_ADD_APP_PUBLIC_HOST # e.g. kuard.my.cluster.slok.dev
+      http:
+        paths:
+          - backend:
+              serviceName: kuard
+              servicePort: 80
+            path: /
