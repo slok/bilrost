@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/slok/bilrost/internal/authbackend"
-	authbackendfactory "github.com/slok/bilrost/internal/authbackend/factory"
 	"github.com/slok/bilrost/internal/backup"
 	"github.com/slok/bilrost/internal/log"
 	"github.com/slok/bilrost/internal/model"
@@ -46,12 +45,12 @@ type service struct {
 
 // ServiceConfig is the service configuration.
 type ServiceConfig struct {
-	Backupper              backup.Backupper
-	ServiceTranslator      KubeServiceTranslator
-	OIDCProxyProvisioner   proxy.OIDCProvisioner
-	AuthBackendRepo        AuthBackendRepository
-	AuthBackendRepoFactory authbackend.AppRegistererFactory
-	Logger                 log.Logger
+	Backupper             backup.Backupper
+	ServiceTranslator     KubeServiceTranslator
+	OIDCProxyProvisioner  proxy.OIDCProvisioner
+	AuthBackendRepo       AuthBackendRepository
+	AuthBackendRegFactory authbackend.AppRegistererFactory
+	Logger                log.Logger
 }
 
 func (c *ServiceConfig) defaults() error {
@@ -64,8 +63,8 @@ func (c *ServiceConfig) defaults() error {
 		return fmt.Errorf("auth backends repository is required")
 	}
 
-	if c.AuthBackendRepoFactory == nil {
-		c.AuthBackendRepoFactory = authbackendfactory.Default
+	if c.AuthBackendRegFactory == nil {
+		return fmt.Errorf("auth backend registerers factory is required")
 	}
 
 	if c.OIDCProxyProvisioner == nil {
@@ -95,7 +94,7 @@ func NewService(cfg ServiceConfig) (Service, error) {
 		svcTranslator:    cfg.ServiceTranslator,
 		proxyProvisioner: cfg.OIDCProxyProvisioner,
 		abRepo:           cfg.AuthBackendRepo,
-		abRegFactory:     cfg.AuthBackendRepoFactory,
+		abRegFactory:     cfg.AuthBackendRegFactory,
 		logger:           cfg.Logger,
 	}, nil
 }
