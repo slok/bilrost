@@ -16,7 +16,7 @@ type CmdConfig struct {
 	KubeConfig       string
 	NamespaceFilter  string
 	NamespaceRunning string
-	MetricsAddr      string
+	ListenAddr       string
 	MetricsPath      string
 }
 
@@ -33,7 +33,7 @@ func NewCmdConfig() (*CmdConfig, error) {
 	app.Flag("namespace-filter", "kubernetes namespace where the controller will listen to events.").Short('n').StringVar(&c.NamespaceFilter)
 	app.Flag("namespace-running", "kubernetes namespace where the controller is running.").Short('r').Required().StringVar(&c.NamespaceRunning)
 	app.Flag("workers", "concurrent processing workers for each kubernetes controller.").Default("3").Short('w').IntVar(&c.Workers)
-	app.Flag("metrics-address", "the address where Prometehus metrics will be served.").Default(":8081").StringVar(&c.MetricsAddr)
+	app.Flag("listen-address", "the address where the HTTP server will be listening.").Default(":8081").StringVar(&c.ListenAddr)
 	app.Flag("metrics-path", "the path where Prometehus metrics will be served.").Default("/metrics").StringVar(&c.MetricsPath)
 
 	_, err := app.Parse(os.Args[1:])

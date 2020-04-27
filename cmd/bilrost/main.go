@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -86,19 +87,28 @@ func Run() error {
 	// Prepare our run entrypoints.
 	var g run.Group
 
-	// Serving Prometheus metrics.
+	// Serving HTTP server.
 	{
-		// We use prometheus global registry.
 		mux := http.NewServeMux()
+
+		// Metrics.
 		mux.Handle(cmdCfg.MetricsPath, promhttp.Handler())
+
+		// Pprof.
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
 		server := &http.Server{
-			Addr:    cmdCfg.MetricsAddr,
+			Addr:    cmdCfg.ListenAddr,
 			Handler: mux,
 		}
 
 		g.Add(
 			func() error {
-				logger.WithKV(log.KV{"addr": cmdCfg.MetricsAddr, "path": cmdCfg.MetricsPath}).Infof("prometheus metrics server listening for requests")
+				logger.WithKV(log.KV{"addr": cmdCfg.ListenAddr}).Infof("http server listening for requests")
 				return server.ListenAndServe()
 			},
 			func(_ error) {
