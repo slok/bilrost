@@ -73,12 +73,12 @@ func Run() error {
 	backupSvc := backup.NewMeasuredbackupper("ingress", metricsRecorder, backup.NewIngressBackupper(kubeSvc, logger))
 	authBackFactory := authbackendfactory.NewFactory(cmdCfg.NamespaceRunning, metricsRecorder, kubeSvc, logger)
 	secSvc, err := security.NewService(security.ServiceConfig{
-		Backupper:              backupSvc,
-		ServiceTranslator:      kubeSvc,
-		OIDCProxyProvisioner:   proxyProvisioner,
-		AuthBackendRepoFactory: authBackFactory,
-		AuthBackendRepo:        kubeSvc,
-		Logger:                 logger,
+		Backupper:             backupSvc,
+		ServiceTranslator:     kubeSvc,
+		OIDCProxyProvisioner:  proxyProvisioner,
+		AuthBackendRegFactory: authBackFactory,
+		AuthBackendRepo:       kubeSvc,
+		Logger:                logger,
 	})
 	if err != nil {
 		return fmt.Errorf("could not create security service: %w", err)

@@ -240,11 +240,11 @@ func TestSecureApp(t *testing.T) {
 
 			// Execute.
 			cfg := security.ServiceConfig{
-				Backupper:              m.backupper,
-				ServiceTranslator:      m.svcTranslator,
-				AuthBackendRepo:        m.abRepo,
-				AuthBackendRepoFactory: m.abAppRegFact,
-				OIDCProxyProvisioner:   m.oidcProxyProv,
+				Backupper:             m.backupper,
+				ServiceTranslator:     m.svcTranslator,
+				AuthBackendRepo:       m.abRepo,
+				AuthBackendRegFactory: m.abAppRegFact,
+				OIDCProxyProvisioner:  m.oidcProxyProv,
 			}
 			svc, err := security.NewService(cfg)
 			require.NoError(err)
@@ -388,11 +388,11 @@ func TestRollbackAppSecurity(t *testing.T) {
 
 			// Execute.
 			cfg := security.ServiceConfig{
-				Backupper:              m.backupper,
-				ServiceTranslator:      m.svcTranslator,
-				AuthBackendRepo:        m.abRepo,
-				AuthBackendRepoFactory: m.abAppRegFact,
-				OIDCProxyProvisioner:   m.oidcProxyProv,
+				Backupper:             m.backupper,
+				ServiceTranslator:     m.svcTranslator,
+				AuthBackendRepo:       m.abRepo,
+				AuthBackendRegFactory: m.abAppRegFact,
+				OIDCProxyProvisioner:  m.oidcProxyProv,
 			}
 			svc, err := security.NewService(cfg)
 			require.NoError(err)
