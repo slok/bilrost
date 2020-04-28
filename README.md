@@ -32,7 +32,7 @@ Bilrost needs 2 things:
 
 - The `AuthBackend` is a cluster scoped CRD that has the data to be able to interact with the auth backend system of your election, for example [Dex].
 - The application to be secured, this can be achieved in 2 modes:
-  - Simple: An Ingress that points to the auth backend that needs to be used to secure that service.
+  - Simple: An ingress annotation that points to the auth backend that needs to be used to secure that service.
   - Advanced: A CRD that has the data of how to secure the app and points to the ingress and setup the proxy.
 
 As you see, this way of splitting the concerns makes the applications being secured have no need to know about how the security backends work not provide data. The `AuthBackends` could be created by different people/roles/apps and be there to be used by the people/roles/apps that secure applications.
@@ -90,16 +90,67 @@ spec:
 
 For more advanced examples check [examples] dir, be aware of the `CHANGE_ME` prefix on the lines that you will need to change/pay attention.
 
-### Supported auth backends
+## Supported auth backends
 
-- [Dex]: Bilrost will use the API to register and unregister the secured clients automatically.
+- [Dex]: Will set the applicaiton ready to be used in a Dex instance by:
+  - Creating a new Client secret.
+  - Storing this secret internally.
+  - Register the app with a client ID and the generated client secret using the Dex API.
 
-### Supported OAUTH2/OIDC proxies
+## Supported OAUTH2/OIDC proxies
 
-- [oauth2-proxy]: Bilrost will create a deployment, service and secret, configure the proxy with OIDC settings for the auth backend and forwardthe ingress to the proxy instead the original app service.
+- [oauth2-proxy]: Will set up an oauth2-proxy by:
+  - Create a Service for the proxy.
+  - Create a Kubernetes secret with the OIDC client information (already ready on the auth backend).
+  - Setup a deployment with the proxy configured to use the auth backend and the original app service as the upstream.
+  - Store a backup of the app's ingress original data.
+  - Update the app ingress to forward the traffic to the proxy.
+
+## F.A.Q
+
+### Can I rollback a secured application?
+
+Yes, Bilrost will detect that the ingress is no longer require to be secured and will trigger a rollback process to let the ingress as it was. This can be triggerend in different ways:
+
+- Deleting the ingress annotation.
+- Deleting the ingress.
+- Deleting security CRD.
+
+### What triggers a reconciliation loop?
+
+Apart from the regular interval reconcliation (every 3m).
+
+- Updates on ingresses
+- Updates on `AppSecurity` CRs.
+- Update on Bilrost generated `Services`, `Secrets`, `Deployments`.
+
+### I'm not happy with the default proxy settings
+
+It's ok, use the CRs in case you want special settings for the proxy, like number of replicas or setting resources.
+
+The ingress annotation method is a fast and simple way of enabling and disabling security, make tests and enable security in a temporary way.
+
+### In what state is this controller?
+
+Is not stable yet.
+
+If you are using it a medium-big scale please let us know how is working in case we need to optimize or fix parts of the controller.
+
+### Is this another ingress controller?
+
+Well is an ingress controller, but only sets up OAUTH2/OIDC security, it has small responsibility, so in other words no, this will not replace Ngix, Skipper, Traefik...
+
+### What does Bilrost mean?
+
+Well is another name for [Bifrost], but there are a lot of projects called Bifrost, including in Kubernetes landscape.
+
+### How about having multiple Bilrost instances?
+
+Although is not required because of its async nature and you could configure the number of workers to run, should be safe to have multiple instances, and in case of sharding you could have instances per namespace if you want.
 
 [mitm]: https://en.wikipedia.org/wiki/Man-in-the-middle_attack
 [Dex]: https://github.com/dexidp/dex
 [oauth2-proxy]: https://github.com/oauth2-proxy/oauth2-proxy
 [manifests]: ./manifests
 [examples]: ./examples
+[Bifrost]: https://en.wikipedia.org/wiki/Bifr%C3%B6st
