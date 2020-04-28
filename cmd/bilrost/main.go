@@ -150,12 +150,17 @@ func Run() error {
 			Logger:         logger,
 		})
 		if err != nil {
-			return fmt.Errorf("could not create ingress handler: %w", err)
+			return fmt.Errorf("could not create controller handler: %w", err)
+		}
+
+		retriever, err := controller.NewRetriever(cmdCfg.NamespaceFilter, kubeSvc)
+		if err != nil {
+			return fmt.Errorf("could not create controller retriever: %w", err)
 		}
 
 		ctrl, err := koopercontroller.New(&koopercontroller.Config{
 			Handler:              handler,
-			Retriever:            controller.NewRetriever(cmdCfg.NamespaceFilter, kubeSvc),
+			Retriever:            retriever,
 			MetricsRecorder:      metricsRecorder,
 			Logger:               kooperLogger,
 			Name:                 "bilrost-controller",

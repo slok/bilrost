@@ -39,6 +39,7 @@ func getBaseLabels() map[string]string {
 		"app.kubernetes.io/name":       "oauth2-proxy",
 		"app.kubernetes.io/component":  "proxy",
 		"app.kubernetes.io/instance":   "my-app-bilrost-proxy",
+		"bilrost.slok.dev/src":         "dlsiqrjj5tmnibb1e1o0",
 	}
 }
 

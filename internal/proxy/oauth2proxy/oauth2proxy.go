@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	"github.com/slok/bilrost/internal/kubernetes/labels"
 	"github.com/slok/bilrost/internal/log"
 	"github.com/slok/bilrost/internal/proxy"
 )
@@ -88,7 +89,7 @@ const (
 
 func (p provisioner) provisionSecret(ctx context.Context, settings proxy.OIDCProxySettings) (*corev1.Secret, error) {
 	name := getResourceName(settings.IngressName)
-	labels := getLabels(name)
+	labels := getLabels(name, settings.IngressNamespace, settings.IngressName)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -118,13 +119,13 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 	// For consistency we will create everything with the same names and labels.
 	name := secret.Name
 	ns := secret.Namespace
-	labels := getLabels(name)
+	labels := secret.Labels
 
 	// Small hack to automatically force a rolling deploy when the secrets change,
 	// if we don't use something to force the rolling update the deployment will not
 	// be updated although the secrets change.
 	// More information: https://github.com/kubernetes/kubernetes/issues/22368
-	checksumLabels := getLabels(name)
+	checksumLabels := getLabels(name, settings.IngressNamespace, settings.IngressName)
 	checksum, err := secretChecksum(secret)
 	if err != nil {
 		return nil, fmt.Errorf("could not get checksum of secret data: %w", err)
@@ -212,7 +213,7 @@ func (p provisioner) provisionDeploymentService(ctx context.Context, dep *appsv1
 	// For consistency we will create everything with the same names and labels.
 	name := dep.Name
 	ns := dep.Namespace
-	labels := getLabels(name)
+	labels := dep.Labels
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -341,12 +342,15 @@ func getResourceName(name string) string {
 	return fmt.Sprintf("%s-bilrost-proxy", name)
 }
 
-func getLabels(name string) map[string]string {
+func getLabels(name, srcNs, srcName string) map[string]string {
 	return map[string]string{
 		"app.kubernetes.io/managed-by": "bilrost",
 		"app.kubernetes.io/name":       "oauth2-proxy",
 		"app.kubernetes.io/component":  "proxy",
 		"app.kubernetes.io/instance":   name,
+		// This label will be used to track what is the origin of the generated resource,
+		// this gives us the ability to listen to changes on this generated resources.
+		labels.LabelKeySource: labels.EncodeSourceLabelValue(srcNs, srcName),
 	}
 }
 

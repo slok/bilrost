@@ -5,12 +5,12 @@ import (
 	"fmt"
 
 	"github.com/spotahome/kooper/controller"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/tools/cache"
 
+	"github.com/slok/bilrost/internal/kubernetes/labels"
 	"github.com/slok/bilrost/internal/log"
 	"github.com/slok/bilrost/internal/model"
 	"github.com/slok/bilrost/internal/security"
@@ -22,31 +22,17 @@ const (
 	securityfinalizer = "finalizers.auth.bilrost.slok.dev/security"
 )
 
-// KubernetesRepository is the service to manage k8s resources by the Kubernetes controller.
-type KubernetesRepository interface {
-	ListIngresses(ctx context.Context, ns string, labelSelector map[string]string) (*networkingv1beta1.IngressList, error)
-	WatchIngresses(ctx context.Context, ns string, labelSelector map[string]string) (watch.Interface, error)
+// HandlerKubernetesRepository is the service to manage k8s resources by the Kubernetes controller.
+type HandlerKubernetesRepository interface {
 	GetIngress(ctx context.Context, ns, name string) (*networkingv1beta1.Ingress, error)
 	UpdateIngress(ctx context.Context, ingress *networkingv1beta1.Ingress) error
 }
 
-//go:generate mockery -case underscore -output controllermock -outpkg controllermock -name KubernetesRepository
-
-// NewRetriever returns the retriever for the controller.
-func NewRetriever(ns string, kuberepo KubernetesRepository) controller.Retriever {
-	return controller.MustRetrieverFromListerWatcher(&cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-			return kuberepo.ListIngresses(context.TODO(), ns, map[string]string{})
-		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-			return kuberepo.WatchIngresses(context.TODO(), ns, map[string]string{})
-		},
-	})
-}
+//go:generate mockery -case underscore -output controllermock -outpkg controllermock -name HandlerKubernetesRepository
 
 // HandlerConfig is the configuration of the controller handler.
 type HandlerConfig struct {
-	KubernetesRepo KubernetesRepository
+	KubernetesRepo HandlerKubernetesRepository
 	SecuritySvc    security.Service
 	Logger         log.Logger
 }
@@ -69,7 +55,7 @@ func (c *HandlerConfig) defaults() error {
 }
 
 type handler struct {
-	repo        KubernetesRepository
+	repo        HandlerKubernetesRepository
 	securitySvc security.Service
 	logger      log.Logger
 }
@@ -89,12 +75,52 @@ func NewHandler(cfg HandlerConfig) (controller.Handler, error) {
 }
 
 func (h handler) Handle(ctx context.Context, obj runtime.Object) error {
-	ing, ok := obj.(*networkingv1beta1.Ingress)
-	if !ok {
-		h.logger.Debugf("kubernetes received object is not an Ingress")
+
+	var ing *networkingv1beta1.Ingress
+	switch v := obj.(type) {
+	case *corev1.Secret, *corev1.Service:
+		// Generated types, we will get the ingress data form the convention labels of
+		// the generated resource and get the original ingress to trigger the reconciliation
+		// loop in case any of the generated resource have changed.
+		vo, ok := v.(metav1.Object)
+		if !ok {
+			h.logger.Debugf("kubernetes received object is not a valid type")
+			return nil
+		}
+
+		h.logger.Infof("triggered by %s/%s", vo.GetNamespace(), vo.GetName())
+
+		// Get original ingress data form the tracked label.
+		ns, name, err := labels.DecodeSourceLabelValue(vo.GetLabels()[labels.LabelKeySource])
+		if err != nil {
+			h.logger.Warningf("could not get original resource data from generated resource labels: %s", err)
+			return nil
+		}
+
+		ing, err = h.repo.GetIngress(ctx, ns, name)
+		if err != nil {
+			return fmt.Errorf("could not get ingress: %w", err)
+		}
+
+	case *networkingv1beta1.Ingress:
+		// Regular main reconciliation use case.
+		ing = v
+	default:
+		// Unknown type, skip.
+		h.logger.Debugf("kubernetes received object is not a valid type")
 		return nil
 	}
 
+	// Start reconciliation loop.
+	err := h.handleIngress(ctx, ing)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (h handler) handleIngress(ctx context.Context, ing *networkingv1beta1.Ingress) error {
 	logger := h.logger.WithKV(log.KV{"obj-ns": ing.Namespace, "obj-id": ing.Name})
 
 	// Get the possible states of an ingress.

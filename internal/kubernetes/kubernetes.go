@@ -10,7 +10,6 @@ import (
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 
@@ -41,7 +40,7 @@ func NewService(coreCli kubernetes.Interface, bilrostCli kubernetesbilrost.Inter
 	}
 }
 
-// GetAuthBackend satisifies controller.AuthBackendRepository interface.
+// GetAuthBackend satisfies multiple interfaces.
 func (s Service) GetAuthBackend(_ context.Context, id string) (*model.AuthBackend, error) {
 	logger := s.logger.WithKV(log.KV{"id": id})
 
@@ -70,7 +69,7 @@ func mapAuthBackendK8sToModel(ab *authv1.AuthBackend) *model.AuthBackend {
 	return res
 }
 
-// EnsureDeployment satisifes oauth2proxy.KubernetesRepository interface.
+// EnsureDeployment satisfies multiple interfaces.
 func (s Service) EnsureDeployment(_ context.Context, dep *appsv1.Deployment) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": dep.Namespace, "obj-name": dep.Name})
 
@@ -99,7 +98,7 @@ func (s Service) EnsureDeployment(_ context.Context, dep *appsv1.Deployment) err
 	return nil
 }
 
-// DeleteDeployment satisfies oauth2proxy.KubernetesRepository interface.
+// DeleteDeployment satisfies multiple interfaces.
 func (s Service) DeleteDeployment(_ context.Context, ns, name string) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
 
@@ -112,7 +111,17 @@ func (s Service) DeleteDeployment(_ context.Context, ns, name string) error {
 	return nil
 }
 
-// EnsureService satisifes oauth2proxy.KubernetesRepository interface.
+// ListDeployments satisfies multiple interfaces.
+func (s Service) ListDeployments(_ context.Context, ns string, options metav1.ListOptions) (*appsv1.DeploymentList, error) {
+	return s.coreCli.AppsV1().Deployments(ns).List(options)
+}
+
+// WatchDeployments satisfies multiple interfaces.
+func (s Service) WatchDeployments(_ context.Context, ns string, options metav1.ListOptions) (watch.Interface, error) {
+	return s.coreCli.AppsV1().Deployments(ns).Watch(options)
+}
+
+// EnsureService satisfies multiple interfaces.
 func (s Service) EnsureService(_ context.Context, svc *corev1.Service) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": svc.Namespace, "obj-name": svc.Name})
 
@@ -142,7 +151,7 @@ func (s Service) EnsureService(_ context.Context, svc *corev1.Service) error {
 	return nil
 }
 
-// DeleteService satisfies oauth2proxy.KubernetesRepository interface.
+// DeleteService satisfies multiple interfaces.
 func (s Service) DeleteService(_ context.Context, ns, name string) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
 
@@ -155,7 +164,17 @@ func (s Service) DeleteService(_ context.Context, ns, name string) error {
 	return nil
 }
 
-// GetSecret satisfies dex.KubernetesRepository interface.
+// ListServices satisfies multiple interfaces.
+func (s Service) ListServices(_ context.Context, ns string, options metav1.ListOptions) (*corev1.ServiceList, error) {
+	return s.coreCli.CoreV1().Services(ns).List(options)
+}
+
+// WatchServices satisfies multiple interfaces.
+func (s Service) WatchServices(_ context.Context, ns string, options metav1.ListOptions) (watch.Interface, error) {
+	return s.coreCli.CoreV1().Services(ns).Watch(options)
+}
+
+// GetSecret satisfies multiple interfaces.
 func (s Service) GetSecret(_ context.Context, ns, name string) (*corev1.Secret, error) {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
 
@@ -169,7 +188,7 @@ func (s Service) GetSecret(_ context.Context, ns, name string) (*corev1.Secret, 
 	return secret, nil
 }
 
-// EnsureSecret satisifes oauth2proxy.KubernetesRepository interface.
+// EnsureSecret satisfies multiple interfaces.
 func (s Service) EnsureSecret(_ context.Context, secret *corev1.Secret) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": secret.Namespace, "obj-name": secret.Name})
 
@@ -198,7 +217,7 @@ func (s Service) EnsureSecret(_ context.Context, secret *corev1.Secret) error {
 	return nil
 }
 
-// DeleteSecret satisfies oauth2proxy.KubernetesRepository interface.
+// DeleteSecret satisfies multiple interfaces.
 func (s Service) DeleteSecret(_ context.Context, ns, name string) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
 
@@ -211,7 +230,17 @@ func (s Service) DeleteSecret(_ context.Context, ns, name string) error {
 	return nil
 }
 
-// GetIngress satisfies oauth2proxy.KubernetesRepository interface.
+// ListSecrets satisfies multiple interfaces.
+func (s Service) ListSecrets(_ context.Context, ns string, options metav1.ListOptions) (*corev1.SecretList, error) {
+	return s.coreCli.CoreV1().Secrets(ns).List(options)
+}
+
+// WatchSecrets satisfies multiple interfaces.
+func (s Service) WatchSecrets(_ context.Context, ns string, options metav1.ListOptions) (watch.Interface, error) {
+	return s.coreCli.CoreV1().Secrets(ns).Watch(options)
+}
+
+// GetIngress satisfies multiple interfaces.
 func (s Service) GetIngress(_ context.Context, ns, name string) (*networkingv1beta1.Ingress, error) {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
 
@@ -225,7 +254,7 @@ func (s Service) GetIngress(_ context.Context, ns, name string) (*networkingv1be
 	return ing, nil
 }
 
-// UpdateIngress satisfies oauth2proxy.KubernetesRepository interface.
+// UpdateIngress satisfies multiple interfaces.
 func (s Service) UpdateIngress(_ context.Context, ingress *networkingv1beta1.Ingress) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ingress.Namespace, "obj-name": ingress.Name})
 
@@ -239,21 +268,17 @@ func (s Service) UpdateIngress(_ context.Context, ingress *networkingv1beta1.Ing
 	return nil
 }
 
-// ListIngresses satisfies controller.IngressControllerKubeService interface.
-func (s Service) ListIngresses(_ context.Context, ns string, labelSelector map[string]string) (*networkingv1beta1.IngressList, error) {
-	return s.coreCli.NetworkingV1beta1().Ingresses(ns).List(metav1.ListOptions{
-		LabelSelector: labels.Set(labelSelector).String(),
-	})
+// ListIngresses satisfies multiple interfaces.
+func (s Service) ListIngresses(_ context.Context, ns string, options metav1.ListOptions) (*networkingv1beta1.IngressList, error) {
+	return s.coreCli.NetworkingV1beta1().Ingresses(ns).List(options)
 }
 
-// WatchIngresses satisfies controller.IngressControllerKubeService interface.
-func (s Service) WatchIngresses(_ context.Context, ns string, labelSelector map[string]string) (watch.Interface, error) {
-	return s.coreCli.NetworkingV1beta1().Ingresses(ns).Watch(metav1.ListOptions{
-		LabelSelector: labels.Set(labelSelector).String(),
-	})
+// WatchIngresses satisfies multiple interfaces.
+func (s Service) WatchIngresses(_ context.Context, ns string, options metav1.ListOptions) (watch.Interface, error) {
+	return s.coreCli.NetworkingV1beta1().Ingresses(ns).Watch(options)
 }
 
-// GetServiceHostAndPort satisifies security.KubeServiceTranslator interface.
+// GetServiceHostAndPort satisfies multiple interfaces.
 func (s Service) GetServiceHostAndPort(_ context.Context, svc model.KubernetesService) (string, int, error) {
 	host := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
 	port, err := strconv.Atoi(svc.PortOrPortName)
@@ -287,7 +312,8 @@ type checkInterface interface {
 	security.AuthBackendRepository
 	security.KubeServiceTranslator
 	oauth2proxy.KubernetesRepository
-	controller.KubernetesRepository
+	controller.HandlerKubernetesRepository
+	controller.RetrieverKubernetesRepository
 	dex.KubernetesRepository
 }
 

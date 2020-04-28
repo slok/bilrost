@@ -32,7 +32,7 @@ func DecodeSourceLabelValue(value string) (ns, name string, err error) {
 
 	id, err := base32.HexEncoding.WithPadding(base32.NoPadding).DecodeString(value)
 	if err != nil {
-		return "", "", fmt.Errorf("could not decode form base32: %w", err)
+		return "", "", fmt.Errorf("could not decode from base32: %w", err)
 	}
 
 	parts := strings.Split(string(id), "/")

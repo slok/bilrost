@@ -66,17 +66,41 @@ func getBaseApp() model.App {
 	}
 }
 
+func getBaseSecret() *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "whatever",
+			Namespace: "whatever-ns",
+			Labels: map[string]string{
+				"bilrost.slok.dev/src": "ehin6t1ddppiut35edq2qrj1dlig",
+			},
+		},
+	}
+}
+
+func getBaseService() *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "whatever",
+			Namespace: "whatever-ns",
+			Labels: map[string]string{
+				"bilrost.slok.dev/src": "ehin6t1ddppiut35edq2qrj1dlig",
+			},
+		},
+	}
+}
+
 func TestHandler(t *testing.T) {
 	tests := map[string]struct {
 		obj    func() runtime.Object
-		mock   func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service)
+		mock   func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service)
 		expErr bool
 	}{
 		"If we try handling an object that we are not supose to handle it should not be handled.": {
 			obj: func() runtime.Object {
 				return &corev1.Pod{}
 			},
-			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {},
+			mock: func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {},
 		},
 
 		"An ingress without controller annotations should be ignored.": {
@@ -85,7 +109,7 @@ func TestHandler(t *testing.T) {
 				ing.Annotations = map[string]string{}
 				return ing
 			},
-			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {},
+			mock: func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {},
 		},
 
 		"An ingress with empty/blank backend controller annotation should be ignored.": {
@@ -96,7 +120,7 @@ func TestHandler(t *testing.T) {
 				}
 				return ing
 			},
-			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {},
+			mock: func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {},
 		},
 
 		"An ingress with more than 1 ingress rule should error.": {
@@ -108,7 +132,7 @@ func TestHandler(t *testing.T) {
 				ing.Spec.Rules = append(ing.Spec.Rules, networkingv1beta1.IngressRule{})
 				return ing
 			},
-			mock:   func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {},
+			mock:   func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {},
 			expErr: true,
 		},
 
@@ -121,8 +145,47 @@ func TestHandler(t *testing.T) {
 				ing.Spec.Rules[0].HTTP.Paths = append(ing.Spec.Rules[0].HTTP.Paths, networkingv1beta1.HTTPIngressPath{})
 				return ing
 			},
-			mock:   func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {},
+			mock:   func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {},
 			expErr: true,
+		},
+
+		"The controller should react on tracked secret events (without ingress annotation).": {
+			obj: func() runtime.Object {
+				s := getBaseSecret()
+				s.Labels = map[string]string{}
+				return s
+			},
+			mock: func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {},
+		},
+
+		"The controller should react on tracked secret events (with ingress annotation).": {
+			obj: func() runtime.Object {
+				return getBaseSecret()
+
+			},
+			mock: func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {
+				expIng := getBaseIngress()
+				mkr.On("GetIngress", mock.Anything, "test-ns", "test-name").Once().Return(expIng, nil)
+			},
+		},
+
+		"The controller should react on tracked service events (without ingress annotation).": {
+			obj: func() runtime.Object {
+				s := getBaseService()
+				s.Labels = map[string]string{}
+				return s
+			},
+			mock: func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {},
+		},
+
+		"The controller should react on tracked service events (with ingress annotation).": {
+			obj: func() runtime.Object {
+				return getBaseService()
+			},
+			mock: func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {
+				expIng := getBaseIngress()
+				mkr.On("GetIngress", mock.Anything, "test-ns", "test-name").Once().Return(expIng, nil)
+			},
 		},
 
 		"An ingress that is not ready but should be handled should be set ready to be handled on next iterations.": {
@@ -133,7 +196,7 @@ func TestHandler(t *testing.T) {
 				}
 				return ing
 			},
-			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {
+			mock: func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {
 				ing := getBaseIngress()
 				ing.Annotations = map[string]string{
 					"auth.bilrost.slok.dev/backend": "test-backend-id",
@@ -168,7 +231,7 @@ func TestHandler(t *testing.T) {
 				}
 				return ing
 			},
-			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {
+			mock: func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {
 				// Secure process.
 				ms.On("SecureApp", mock.Anything, mock.Anything).Once().Return(nil)
 
@@ -192,7 +255,7 @@ func TestHandler(t *testing.T) {
 				}
 				return ing
 			},
-			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {
+			mock: func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {
 				// Secure process.
 				ms.On("SecureApp", mock.Anything, mock.Anything).Once().Return(nil)
 
@@ -222,7 +285,7 @@ func TestHandler(t *testing.T) {
 				}
 				return ing
 			},
-			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {
+			mock: func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {
 				// Rollback process.
 				expApp := getBaseApp()
 				expApp.AuthBackendID = "" // Because we don't have this.
@@ -261,7 +324,7 @@ func TestHandler(t *testing.T) {
 				ing.DeletionTimestamp = &metav1.Time{Time: time.Now()}
 				return ing
 			},
-			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {
+			mock: func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {
 				// Rollback process.
 				expApp := getBaseApp()
 				ms.On("RollbackAppSecurity", mock.Anything, expApp).Once().Return(nil)
@@ -295,7 +358,7 @@ func TestHandler(t *testing.T) {
 				ing.DeletionTimestamp = &metav1.Time{Time: time.Now()}
 				return ing
 			},
-			mock: func(mkr *controllermock.KubernetesRepository, ms *securitymock.Service) {},
+			mock: func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {},
 		},
 	}
 
@@ -305,7 +368,7 @@ func TestHandler(t *testing.T) {
 			require := require.New(t)
 
 			// Mocks.
-			mkr := &controllermock.KubernetesRepository{}
+			mkr := &controllermock.HandlerKubernetesRepository{}
 			ms := &securitymock.Service{}
 			test.mock(mkr, ms)
 
