@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/slok/bilrost/internal/log"
+	"github.com/slok/bilrost/internal/model"
 	"github.com/slok/bilrost/internal/proxy"
 	"github.com/slok/bilrost/internal/proxy/oauth2proxy"
 	"github.com/slok/bilrost/internal/proxy/oauth2proxy/oauth2proxymock"
@@ -22,15 +23,48 @@ import (
 
 func getBaseSettings() proxy.OIDCProxySettings {
 	return proxy.OIDCProxySettings{
-		URL:              "https://my-app.my-cluster.dev",
-		UpstreamURL:      "http://my-app.my-ns.svc.cluster.local:8080",
-		IssuerURL:        "https://dex.my-cluster.dev",
-		ClientID:         "my-app-bilrost",
-		ClientSecret:     "my-secret",
-		Scopes:           []string{"openid", "email", "profile", "groups", "offline_access"},
-		IngressNamespace: "my-ns",
-		IngressName:      "my-app",
+		URL:          "https://my-app.my-cluster.dev",
+		UpstreamURL:  "http://my-app.my-ns.svc.cluster.local:8080",
+		IssuerURL:    "https://dex.my-cluster.dev",
+		ClientID:     "my-app-bilrost",
+		ClientSecret: "my-secret",
+		App: model.App{
+			ID:            "test-ns/my-app",
+			AuthBackendID: "test-ns-dex-backend",
+			Host:          "my.app.slok.dev",
+			Ingress: model.KubernetesIngress{
+				Namespace: "my-ns",
+				Name:      "my-app",
+				Upstream: model.KubernetesService{
+					Name:           "internal-app",
+					Namespace:      "test-ns",
+					PortOrPortName: "http",
+				},
+			},
+		},
 	}
+}
+
+func getCustomSettings() proxy.OIDCProxySettings {
+	s := getBaseSettings()
+	s.App.ProxySettings = model.ProxySettings{
+		Scopes: []string{"c9", "c19", "c29"},
+		Oauth2Proxy: &model.Oauth2ProxySettings{
+			Image:    "quay.io/oauth2-proxy/oauth2-proxy:v99.99.99",
+			Replicas: 99,
+			Resources: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("9m"),
+					corev1.ResourceMemory: resource.MustParse("19Mi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("29m"),
+					corev1.ResourceMemory: resource.MustParse("39Mi"),
+				},
+			},
+		},
+	}
+	return s
 }
 
 func getBaseLabels() map[string]string {
@@ -109,6 +143,39 @@ func getBaseDeployment() *appsv1.Deployment {
 	}
 }
 
+func getCustomDeployment() *appsv1.Deployment {
+	d := getBaseDeployment()
+	var repl int32 = 99
+	d.Spec.Replicas = &repl
+	d.Spec.Template.Spec.Containers[0].Image = "quay.io/oauth2-proxy/oauth2-proxy:v99.99.99"
+	d.Spec.Template.Spec.Containers[0].Resources = corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("9m"),
+			corev1.ResourceMemory: resource.MustParse("19Mi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("29m"),
+			corev1.ResourceMemory: resource.MustParse("39Mi"),
+		},
+	}
+	d.Spec.Template.Spec.Containers[0].Args = []string{
+		"--oidc-issuer-url=https://dex.my-cluster.dev",
+		"--client-id=$(OIDC_CLIENT_ID)",
+		"--client-secret=$(OIDC_CLIENT_SECRET)",
+		"--http-address=0.0.0.0:4180",
+		"--redirect-url=https://my-app.my-cluster.dev/oauth2/callback",
+		"--upstream=http://my-app.my-ns.svc.cluster.local:8080",
+		"--scope=c9 c19 c29",
+		`--cookie-secret=test`,
+		`--cookie-secure=false`,
+		`--provider=oidc`,
+		"--skip-provider-button",
+		`--email-domain=*`,
+	}
+
+	return d
+}
+
 func getBaseService() *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -185,6 +252,29 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 			mock: func(m *oauth2proxymock.KubernetesRepository) {
 				expSec := getBaseSecret()
 				expDep := getBaseDeployment()
+				expSvc := getBaseService()
+
+				m.On("EnsureSecret", mock.Anything, expSec).Once().Return(nil)
+				m.On("EnsureDeployment", mock.Anything, expDep).Once().Return(nil)
+				m.On("EnsureService", mock.Anything, expSvc).Once().Return(nil)
+
+				storedIngress := getBaseIngress()
+				m.On("GetIngress", mock.Anything, "my-ns", "my-app").Once().Return(storedIngress, nil)
+
+				expIngress := getBaseIngress()
+				expIngress.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1beta1.IngressBackend{
+					ServiceName: "my-app-bilrost-proxy",
+					ServicePort: intstr.FromString("http"),
+				}
+				m.On("UpdateIngress", mock.Anything, expIngress).Once().Return(nil)
+			},
+		},
+
+		"A correct proxy provisioning should provision a secret, a deployment, a service, and swap the ingress (custom settings).": {
+			settings: getCustomSettings,
+			mock: func(m *oauth2proxymock.KubernetesRepository) {
+				expSec := getBaseSecret()
+				expDep := getCustomDeployment()
 				expSvc := getBaseService()
 
 				m.On("EnsureSecret", mock.Anything, expSec).Once().Return(nil)

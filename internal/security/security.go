@@ -150,12 +150,11 @@ func (s service) SecureApp(ctx context.Context, app model.App) error {
 	proxySettings := proxy.OIDCProxySettings{
 		URL: fmt.Sprintf("https://%s", app.Host),
 		// TODO(slok): Is always http? https?
-		UpstreamURL:      fmt.Sprintf("http://%s:%d", host, port),
-		IssuerURL:        abPublicURL,
-		ClientID:         oaRes.ClientID,
-		ClientSecret:     oaRes.ClientSecret,
-		IngressName:      app.Ingress.Name,
-		IngressNamespace: app.Ingress.Namespace,
+		UpstreamURL:  fmt.Sprintf("http://%s:%d", host, port),
+		IssuerURL:    abPublicURL,
+		ClientID:     oaRes.ClientID,
+		ClientSecret: oaRes.ClientSecret,
+		App:          app,
 	}
 	err = s.proxyProvisioner.Provision(ctx, proxySettings)
 	if err != nil {

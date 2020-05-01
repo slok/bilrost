@@ -27,6 +27,7 @@ import (
 type AuthV1Interface interface {
 	RESTClient() rest.Interface
 	AuthBackendsGetter
+	IngressAuthsGetter
 }
 
 // AuthV1Client is used to interact with features provided by the auth.bilrost.slok.dev group.
@@ -36,6 +37,10 @@ type AuthV1Client struct {
 
 func (c *AuthV1Client) AuthBackends() AuthBackendInterface {
 	return newAuthBackends(c)
+}
+
+func (c *AuthV1Client) IngressAuths(namespace string) IngressAuthInterface {
+	return newIngressAuths(c, namespace)
 }
 
 // NewForConfig creates a new AuthV1Client for the given config.

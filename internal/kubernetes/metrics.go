@@ -11,6 +11,7 @@ import (
 
 	"github.com/slok/bilrost/internal/metrics"
 	"github.com/slok/bilrost/internal/model"
+	authv1 "github.com/slok/bilrost/pkg/apis/auth/v1"
 )
 
 // MeasuredService is like Service but measuring with a metrics.Recorder
@@ -31,6 +32,30 @@ func (m MeasuredService) GetAuthBackend(ctx context.Context, id string) (a *mode
 		m.rec.ObserveKubernetesServiceOperation(ctx, "", "GetAuthBackend", err == nil, t0)
 	}(time.Now())
 	return m.next.GetAuthBackend(ctx, id)
+}
+
+// GetIngressAuth satisifes multiple interfaces.
+func (m MeasuredService) GetIngressAuth(ctx context.Context, namespace, name string) (ia *authv1.IngressAuth, err error) {
+	defer func(t0 time.Time) {
+		m.rec.ObserveKubernetesServiceOperation(ctx, namespace, "GetIngressAuth", err == nil, t0)
+	}(time.Now())
+	return m.next.GetIngressAuth(ctx, namespace, name)
+}
+
+// ListIngressAuths satisifes multiple interfaces.
+func (m MeasuredService) ListIngressAuths(ctx context.Context, namespace string, labelSelector map[string]string) (ial *authv1.IngressAuthList, err error) {
+	defer func(t0 time.Time) {
+		m.rec.ObserveKubernetesServiceOperation(ctx, namespace, "ListIngressAuths", err == nil, t0)
+	}(time.Now())
+	return m.next.ListIngressAuths(ctx, namespace, labelSelector)
+}
+
+// WatchIngressAuths satisifes multiple interfaces.
+func (m MeasuredService) WatchIngressAuths(ctx context.Context, namespace string, labelSelector map[string]string) (i watch.Interface, err error) {
+	defer func(t0 time.Time) {
+		m.rec.ObserveKubernetesServiceOperation(ctx, namespace, "WatchIngressAuths", err == nil, t0)
+	}(time.Now())
+	return m.next.WatchIngressAuths(ctx, namespace, labelSelector)
 }
 
 // EnsureDeployment satisifes oauth2proxy.KubernetesRepository interface.

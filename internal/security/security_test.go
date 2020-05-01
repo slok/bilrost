@@ -91,13 +91,25 @@ func TestSecureApp(t *testing.T) {
 
 				// The proxy should be provisioned.
 				expProxySettings := proxy.OIDCProxySettings{
-					URL:              "https://my.app.slok.dev",
-					UpstreamURL:      "http://internal-app.my-ns.svc.cluster.local:8080",
-					IssuerURL:        "https://test-dex.dev",
-					ClientID:         "app1",
-					ClientSecret:     "my5cr37",
-					IngressName:      "my-app",
-					IngressNamespace: "test-ns",
+					URL:          "https://my.app.slok.dev",
+					UpstreamURL:  "http://internal-app.my-ns.svc.cluster.local:8080",
+					IssuerURL:    "https://test-dex.dev",
+					ClientID:     "app1",
+					ClientSecret: "my5cr37",
+					App: model.App{
+						ID:            "test-ns/my-app",
+						AuthBackendID: "test-ns-dex-backend",
+						Host:          "my.app.slok.dev",
+						Ingress: model.KubernetesIngress{
+							Name:      "my-app",
+							Namespace: "test-ns",
+							Upstream: model.KubernetesService{
+								Name:           "internal-app",
+								Namespace:      "test-ns",
+								PortOrPortName: "http",
+							},
+						},
+					},
 				}
 				m.oidcProxyProv.On("Provision", mock.Anything, expProxySettings).Once().Return(nil)
 			},
@@ -163,13 +175,25 @@ func TestSecureApp(t *testing.T) {
 
 				// The proxy should be provisioned.
 				expProxySettings := proxy.OIDCProxySettings{
-					URL:              "https://my.app.slok.dev",
-					UpstreamURL:      "http://internal-app.my-ns.svc.cluster.local:8080",
-					IssuerURL:        "https://test-dex.dev",
-					ClientID:         "app1",
-					ClientSecret:     "my5cr37",
-					IngressName:      "my-app",
-					IngressNamespace: "test-ns",
+					URL:          "https://my.app.slok.dev",
+					UpstreamURL:  "http://internal-app.my-ns.svc.cluster.local:8080",
+					IssuerURL:    "https://test-dex.dev",
+					ClientID:     "app1",
+					ClientSecret: "my5cr37",
+					App: model.App{
+						ID:            "test-ns/my-app",
+						AuthBackendID: "test-ns-dex-backend",
+						Host:          "my.app.slok.dev",
+						Ingress: model.KubernetesIngress{
+							Name:      "my-app",
+							Namespace: "test-ns",
+							Upstream: model.KubernetesService{
+								Name:           "internal-app",
+								Namespace:      "test-ns",
+								PortOrPortName: "http",
+							},
+						},
+					},
 				}
 				m.oidcProxyProv.On("Provision", mock.Anything, expProxySettings).Once().Return(nil)
 			},

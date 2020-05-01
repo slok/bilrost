@@ -70,6 +70,34 @@ func mapAuthBackendK8sToModel(ab *authv1.AuthBackend) *model.AuthBackend {
 	return res
 }
 
+// GetIngressAuth satisifes multiple interfaces.
+func (s Service) GetIngressAuth(_ context.Context, namespace, name string) (*authv1.IngressAuth, error) {
+	logger := s.logger.WithKV(log.KV{"obj-ns": namespace, "obj-name": name})
+
+	ia, err := s.bilrostCli.AuthV1().IngressAuths(namespace).Get(name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Debugf("ingress auth got")
+
+	return ia, nil
+}
+
+// ListIngressAuths satisifes multiple interfaces.
+func (s Service) ListIngressAuths(ctx context.Context, ns string, labelSelector map[string]string) (*authv1.IngressAuthList, error) {
+	return s.bilrostCli.AuthV1().IngressAuths(ns).List(metav1.ListOptions{
+		LabelSelector: labels.Set(labelSelector).String(),
+	})
+}
+
+// WatchIngressAuths satisifes multiple interfaces.
+func (s Service) WatchIngressAuths(ctx context.Context, ns string, labelSelector map[string]string) (watch.Interface, error) {
+	return s.bilrostCli.AuthV1().IngressAuths(ns).Watch(metav1.ListOptions{
+		LabelSelector: labels.Set(labelSelector).String(),
+	})
+}
+
 // EnsureDeployment satisifes oauth2proxy.KubernetesRepository interface.
 func (s Service) EnsureDeployment(_ context.Context, dep *appsv1.Deployment) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": dep.Namespace, "obj-name": dep.Name})
@@ -287,7 +315,8 @@ type checkInterface interface {
 	security.AuthBackendRepository
 	security.KubeServiceTranslator
 	oauth2proxy.KubernetesRepository
-	controller.KubernetesRepository
+	controller.HandlerKubernetesRepository
+	controller.RetrieverKubernetesRepository
 	dex.KubernetesRepository
 }
 

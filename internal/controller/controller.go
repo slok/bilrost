@@ -6,14 +6,12 @@ import (
 
 	"github.com/spotahome/kooper/controller"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/tools/cache"
 
 	"github.com/slok/bilrost/internal/log"
-	"github.com/slok/bilrost/internal/model"
 	"github.com/slok/bilrost/internal/security"
+	authv1 "github.com/slok/bilrost/pkg/apis/auth/v1"
 )
 
 const (
@@ -22,31 +20,18 @@ const (
 	securityfinalizer = "finalizers.auth.bilrost.slok.dev/security"
 )
 
-// KubernetesRepository is the service to manage k8s resources by the Kubernetes controller.
-type KubernetesRepository interface {
-	ListIngresses(ctx context.Context, ns string, labelSelector map[string]string) (*networkingv1beta1.IngressList, error)
-	WatchIngresses(ctx context.Context, ns string, labelSelector map[string]string) (watch.Interface, error)
+// HandlerKubernetesRepository is the service to manage k8s resources by the Kubernetes handler.
+type HandlerKubernetesRepository interface {
+	GetIngressAuth(ctx context.Context, ns, name string) (*authv1.IngressAuth, error)
 	GetIngress(ctx context.Context, ns, name string) (*networkingv1beta1.Ingress, error)
 	UpdateIngress(ctx context.Context, ingress *networkingv1beta1.Ingress) error
 }
 
-//go:generate mockery -case underscore -output controllermock -outpkg controllermock -name KubernetesRepository
-
-// NewRetriever returns the retriever for the controller.
-func NewRetriever(ns string, kuberepo KubernetesRepository) controller.Retriever {
-	return controller.MustRetrieverFromListerWatcher(&cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-			return kuberepo.ListIngresses(context.TODO(), ns, map[string]string{})
-		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-			return kuberepo.WatchIngresses(context.TODO(), ns, map[string]string{})
-		},
-	})
-}
+//go:generate mockery -case underscore -output controllermock -outpkg controllermock -name HandlerKubernetesRepository
 
 // HandlerConfig is the configuration of the controller handler.
 type HandlerConfig struct {
-	KubernetesRepo KubernetesRepository
+	KubernetesRepo HandlerKubernetesRepository
 	SecuritySvc    security.Service
 	Logger         log.Logger
 }
@@ -69,12 +54,18 @@ func (c *HandlerConfig) defaults() error {
 }
 
 type handler struct {
-	repo        KubernetesRepository
+	repo        HandlerKubernetesRepository
 	securitySvc security.Service
 	logger      log.Logger
 }
 
 // NewHandler returns the handler for the controller.
+//
+// This handler is the entrypoint of all the logic that is triggered with the controller pattern,
+// this handle will be called based on the Kubernetes received events (subscribed using the retrievers)
+// so this handler knows how to handle changes based on ingress obects and ingressAuth CR objects
+// depending on what is the received updated object it will call internally the required
+// handle process.
 func NewHandler(cfg HandlerConfig) (controller.Handler, error) {
 	err := cfg.defaults()
 	if err != nil {
@@ -88,13 +79,38 @@ func NewHandler(cfg HandlerConfig) (controller.Handler, error) {
 	}, nil
 }
 
+// Handle implements a kooper controller handler that will receive "change" events on Kubernetes resources
+//
+// The logic begind the handler is to act always with the same data independently of the
+// object event is received. For example:
+// - If an ingress resource event is received we will try getting the corresponding ingressAuth CR and execute handling logic.
+// - If an ingressAuth CR is received we will try getting the ingress associated (same ns and name) and execute handling logic.
+//
+// In case we don't have an IngressAuth CR associated with the ingress, we will use the default data as a
+// fallback, this gives us the ability to reconcile based only in ingress data.
+// On the other side if we have IngressAuth CR we will use this IngressAuth data for the reconciliation.
+// So we could put it in simple words: Ingress data is required, IngressAuth CR data is optional (used to set advanced options).
+//
+// TODO(slok): Not optimized in k8s resource calls, some calls are not required, check this when we have problems with it.
 func (h handler) Handle(ctx context.Context, obj runtime.Object) error {
-	ing, ok := obj.(*networkingv1beta1.Ingress)
-	if !ok {
-		h.logger.Debugf("kubernetes received object is not an Ingress")
-		return nil
+	switch v := obj.(type) {
+	case *networkingv1beta1.Ingress:
+		return h.handle(ctx, v, nil)
+	case *authv1.IngressAuth:
+		// We need ingress information, if not present then error.
+		ing, err := h.repo.GetIngress(ctx, v.Namespace, v.Name)
+		if err != nil {
+			return fmt.Errorf("ingress resource for %s/%s not found, required: %w", v.Namespace, v.Name, err)
+		}
+
+		return h.handle(ctx, ing, v)
 	}
 
+	h.logger.Debugf("kubernetes received object is not a valid type to be handled")
+	return nil
+}
+
+func (h handler) handle(ctx context.Context, ing *networkingv1beta1.Ingress, ia *authv1.IngressAuth) error {
 	logger := h.logger.WithKV(log.KV{"obj-ns": ing.Namespace, "obj-id": ing.Name})
 
 	// Get the possible states of an ingress.
@@ -140,7 +156,15 @@ func (h handler) Handle(ctx context.Context, obj runtime.Object) error {
 	case wantHandle && readyToBeHandled && !wantDelete:
 		logger.Infof("start securing ingress...")
 
-		err := h.securitySvc.SecureApp(ctx, mapToModel(ing))
+		// Try getting advanced options from the CR.
+		if ia == nil {
+			ia, err = h.tryGetIngressAuth(ctx, ing.Name, ing.Namespace)
+			if err != nil {
+				return err
+			}
+		}
+
+		err := h.securitySvc.SecureApp(ctx, mapToModel(ing, ia))
 		if err != nil {
 			return fmt.Errorf("could not secure the application: %w", err)
 		}
@@ -161,7 +185,16 @@ func (h handler) Handle(ctx context.Context, obj runtime.Object) error {
 	case !wantHandle && readyToBeHandled, wantDelete:
 		logger.Infof("start rollbacking ingress security...")
 
-		err := h.securitySvc.RollbackAppSecurity(ctx, mapToModel(ing))
+		// Try getting advanced options from the CR.
+		// TODO(slok): Do we need to get advanced options?
+		if ia == nil {
+			ia, err = h.tryGetIngressAuth(ctx, ing.Name, ing.Namespace)
+			if err != nil {
+				return err
+			}
+		}
+
+		err := h.securitySvc.RollbackAppSecurity(ctx, mapToModel(ing, ia))
 		if err != nil {
 			return fmt.Errorf("could not rollback the ingress security: %w", err)
 		}
@@ -249,21 +282,17 @@ func validateIngress(ing *networkingv1beta1.Ingress) error {
 	return nil
 }
 
-func mapToModel(ing *networkingv1beta1.Ingress) model.App {
-	return model.App{
-		ID:            fmt.Sprintf("%s/%s", ing.Namespace, ing.Name),
-		AuthBackendID: ing.Annotations[backendAnnotation],
-		Host:          ing.Spec.Rules[0].Host,
-		Ingress: model.KubernetesIngress{
-			Name:      ing.Name,
-			Namespace: ing.Namespace,
-			Upstream: model.KubernetesService{
-				Name:           ing.Spec.Rules[0].HTTP.Paths[0].Backend.ServiceName,
-				Namespace:      ing.Namespace,
-				PortOrPortName: ing.Spec.Rules[0].HTTP.Paths[0].Backend.ServicePort.String(),
-			},
-		},
+// tryGetIngressAuth if not present returns nil.
+func (h handler) tryGetIngressAuth(ctx context.Context, namespace, name string) (*authv1.IngressAuth, error) {
+	ai, err := h.repo.GetIngressAuth(ctx, namespace, name)
+	if err != nil {
+		if !kubeerrors.IsNotFound(err) {
+			return nil, fmt.Errorf("could not get ingress auth: %w", err)
+		}
+		return nil, nil
 	}
+
+	return ai, nil
 }
 
 func sliceContainsString(ss []string, s string) bool {

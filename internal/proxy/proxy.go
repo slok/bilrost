@@ -2,6 +2,8 @@ package proxy
 
 import (
 	"context"
+
+	"github.com/slok/bilrost/internal/model"
 )
 
 // OIDCProxySettings are the settings of the proxy.
@@ -16,12 +18,8 @@ type OIDCProxySettings struct {
 	ClientID string
 	// ClientSecret is the secret used for the app to communicate with the auth service.
 	ClientSecret string
-	// Scopes are the Oauth/OIDC scopes asked to the auth service to set that info in the token.
-	Scopes []string
-	// IngressName is the app's ingress, the entrypoint to the application that we must secure.
-	IngressName string
-	// IngressNamespace is the namespace where the app's ingress is living.
-	IngressNamespace string
+	// Is the main application information.
+	App model.App
 }
 
 // UnprovisionSettings are the settings that the proxy service needs to restore
