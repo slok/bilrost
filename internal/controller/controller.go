@@ -95,8 +95,10 @@ func NewHandler(cfg HandlerConfig) (controller.Handler, error) {
 func (h handler) Handle(ctx context.Context, obj runtime.Object) error {
 	switch v := obj.(type) {
 	case *networkingv1beta1.Ingress:
+		h.logger.Debugf("ingress event received...")
 		return h.handle(ctx, v, nil)
 	case *authv1.IngressAuth:
+		h.logger.Debugf("ingressAuth event received...")
 		// We need ingress information, if not present then error.
 		ing, err := h.repo.GetIngress(ctx, v.Namespace, v.Name)
 		if err != nil {
@@ -158,7 +160,7 @@ func (h handler) handle(ctx context.Context, ing *networkingv1beta1.Ingress, ia 
 
 		// Try getting advanced options from the CR.
 		if ia == nil {
-			ia, err = h.tryGetIngressAuth(ctx, ing.Name, ing.Namespace)
+			ia, err = h.tryGetIngressAuth(ctx, ing.Namespace, ing.Name)
 			if err != nil {
 				return err
 			}
@@ -192,6 +194,7 @@ func (h handler) handle(ctx context.Context, ing *networkingv1beta1.Ingress, ia 
 			if err != nil {
 				return err
 			}
+
 		}
 
 		err := h.securitySvc.RollbackAppSecurity(ctx, mapToModel(ing, ia))
@@ -286,10 +289,10 @@ func validateIngress(ing *networkingv1beta1.Ingress) error {
 func (h handler) tryGetIngressAuth(ctx context.Context, namespace, name string) (*authv1.IngressAuth, error) {
 	ai, err := h.repo.GetIngressAuth(ctx, namespace, name)
 	if err != nil {
-		if !kubeerrors.IsNotFound(err) {
-			return nil, fmt.Errorf("could not get ingress auth: %w", err)
+		if kubeerrors.IsNotFound(err) {
+			return nil, nil
 		}
-		return nil, nil
+		return nil, fmt.Errorf("could not get ingress auth: %w", err)
 	}
 
 	return ai, nil

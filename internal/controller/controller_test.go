@@ -318,7 +318,7 @@ func TestHandler(t *testing.T) {
 			},
 			mock: func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {
 				ia := getBaseIngressAuth()
-				mkr.On("GetIngressAuth", mock.Anything, mock.Anything, mock.Anything).Once().Return(ia, nil)
+				mkr.On("GetIngressAuth", mock.Anything, "test-ns", "test").Once().Return(ia, nil)
 
 				// Secure process with advanced options (check mapping correct).
 				expApp := getAdvancedApp()

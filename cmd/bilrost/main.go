@@ -142,8 +142,16 @@ func Run() error {
 		)
 	}
 
-	// Controller.
+	// Controllers.
+	// We create and run 2 controllers that have the same handler.
+	//
+	// The primary controller is based on Ingresses and the secondary controller is based on
+	// IngressAuth CR.
+	//
+	// Both controllers end executing the same reconciliation loop but if anyhting changes in any of
+	// the resources we will reconcile again.
 	{
+		const retries = 2
 		handler, err := controller.NewHandler(controller.HandlerConfig{
 			KubernetesRepo: kubeSvc,
 			SecuritySvc:    secSvc,
@@ -153,31 +161,49 @@ func Run() error {
 			return fmt.Errorf("could not create controller handler: %w", err)
 		}
 
-		retriever, err := controller.NewRetriever(cmdCfg.NamespaceFilter, kubeSvc)
-		if err != nil {
-			return fmt.Errorf("could not create controller retriever: %w", err)
-		}
-
-		ctrl, err := koopercontroller.New(&koopercontroller.Config{
+		ctrlIngStop := make(chan struct{})
+		ctrlIng, err := koopercontroller.New(&koopercontroller.Config{
 			Handler:              handler,
-			Retriever:            retriever,
+			Retriever:            controller.NewIngressRetriever(cmdCfg.NamespaceFilter, kubeSvc),
 			MetricsRecorder:      metricsRecorder,
 			Logger:               kooperLogger,
-			Name:                 "bilrost-controller",
+			Name:                 "bilrost-controller-ingress",
 			ConcurrentWorkers:    cmdCfg.Workers,
-			ProcessingJobRetries: 2,
+			ProcessingJobRetries: retries,
 		})
 		if err != nil {
 			return fmt.Errorf("could not create backend auth kubernetes controller: %w", err)
 		}
 
-		stopC := make(chan struct{})
 		g.Add(
 			func() error {
-				return ctrl.Run(stopC)
+				return ctrlIng.Run(ctrlIngStop)
 			},
 			func(_ error) {
-				close(stopC)
+				close(ctrlIngStop)
+			},
+		)
+
+		ctrlIngAuthStop := make(chan struct{})
+		ctrlIngAuth, err := koopercontroller.New(&koopercontroller.Config{
+			Handler:              handler,
+			Retriever:            controller.NewIngressAuthRetriever(cmdCfg.NamespaceFilter, kubeSvc),
+			MetricsRecorder:      metricsRecorder,
+			Logger:               kooperLogger,
+			Name:                 "bilrost-controller-ingressauth",
+			ConcurrentWorkers:    cmdCfg.Workers,
+			ProcessingJobRetries: retries,
+		})
+		if err != nil {
+			return fmt.Errorf("could not create backend auth kubernetes controller: %w", err)
+		}
+
+		g.Add(
+			func() error {
+				return ctrlIngAuth.Run(ctrlIngAuthStop)
+			},
+			func(_ error) {
+				close(ctrlIngAuthStop)
 			},
 		)
 	}

@@ -23,28 +23,26 @@ type RetrieverKubernetesRepository interface {
 
 //go:generate mockery -case underscore -output controllermock -outpkg controllermock -name RetrieverKubernetesRepository
 
-// NewRetriever returns the retriever for the controller.
-func NewRetriever(ns string, kuberepo RetrieverKubernetesRepository) (controller.Retriever, error) {
-	return controller.NewMultiRetriever(
-		// Ingress based entrypoint.
-		controller.MustRetrieverFromListerWatcher(&cache.ListWatch{
-			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-				return kuberepo.ListIngresses(context.TODO(), ns, map[string]string{})
-			},
-			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-				return kuberepo.WatchIngresses(context.TODO(), ns, map[string]string{})
-			},
-		}),
+// NewIngressRetriever returns the retriever for ingress events.
+func NewIngressRetriever(ns string, kuberepo RetrieverKubernetesRepository) controller.Retriever {
+	return controller.MustRetrieverFromListerWatcher(&cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			return kuberepo.ListIngresses(context.TODO(), ns, map[string]string{})
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			return kuberepo.WatchIngresses(context.TODO(), ns, map[string]string{})
+		},
+	})
+}
 
-		// CR based entrypoint.
-		controller.MustRetrieverFromListerWatcher(&cache.ListWatch{
-			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-				return kuberepo.ListIngressAuths(context.TODO(), ns, map[string]string{})
-			},
-			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-				return kuberepo.WatchIngressAuths(context.TODO(), ns, map[string]string{})
-			},
-		}),
-	)
-
+// NewIngressAuthRetriever returns the retriever for ingress auth CR events.
+func NewIngressAuthRetriever(ns string, kuberepo RetrieverKubernetesRepository) controller.Retriever {
+	return controller.MustRetrieverFromListerWatcher(&cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			return kuberepo.ListIngressAuths(context.TODO(), ns, map[string]string{})
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			return kuberepo.WatchIngressAuths(context.TODO(), ns, map[string]string{})
+		},
+	})
 }

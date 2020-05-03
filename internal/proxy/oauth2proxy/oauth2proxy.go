@@ -354,7 +354,7 @@ func (p provisioner) updateIngressBackend(ctx context.Context, ns, name string, 
 	// Do we need to update the ingress?
 	currentBackend := ing.Spec.Rules[0].HTTP.Paths[0].Backend
 	if currentBackend == newBackend {
-		p.logger.Debugf("ingress already pointing to %s:%s service, ignoring update", newBackend.ServiceName, newBackend.ServicePort)
+		p.logger.Debugf("ingress already pointing to %s:%v service, ignoring update", newBackend.ServiceName)
 		return nil
 	}
 
