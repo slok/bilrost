@@ -88,12 +88,7 @@ spec:
                         to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
                       type: object
                   type: object
-              required:
-              - image
-              - replicas
               type: object
-          required:
-          - authSettings
           type: object
         status:
           description: IngressAuthStatus is the ingress auth status.

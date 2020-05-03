@@ -67,7 +67,7 @@ type IngressAuth struct {
 
 // IngressAuthSpec is the spec of an auth backend.
 type IngressAuthSpec struct {
-	AuthSettings    AuthSettings `json:"authSettings"`
+	AuthSettings    AuthSettings `json:"authSettings,omitempty"`
 	AuthProxySource `json:",inline"`
 }
 
@@ -83,8 +83,8 @@ type AuthSettings struct {
 
 // Oauth2ProxyAuthProxySource has the configuration of an oauth2proxy
 type Oauth2ProxyAuthProxySource struct {
-	Image     string                       `json:"image"`
-	Replicas  int                          `json:"replicas"`
+	Image     string                       `json:"image,omitempty"`
+	Replicas  int                          `json:"replicas,omitempty"`
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
