@@ -77,7 +77,7 @@ func getBaseLabels() map[string]string {
 }
 
 func getBaseDeployment() *appsv1.Deployment {
-	replicas := int32(1)
+	replicas := int32(2)
 	checkSumLabels := getBaseLabels()
 	checkSumLabels["bilrost.slok.dev/secret-checksum-to-force-update"] = "fcf3c8b4319dc73b54608b9fe857b39d"
 

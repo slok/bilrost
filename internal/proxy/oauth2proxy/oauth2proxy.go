@@ -200,7 +200,7 @@ func getCustomizableSettings(settings proxy.OIDCProxySettings) customizableSetti
 	defaults := customizableSettings{
 		Image:    "quay.io/oauth2-proxy/oauth2-proxy:v5.1.0",
 		Scopes:   []string{"openid", "email", "profile", "groups", "offline_access"},
-		Replicas: int32(1),
+		Replicas: int32(2),
 		Resources: corev1.ResourceRequirements{
 			// TODO(slok): Do we need limits?
 			Requests: corev1.ResourceList{
