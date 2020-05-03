@@ -170,6 +170,7 @@ func Run() error {
 			Name:                 "bilrost-controller-ingress",
 			ConcurrentWorkers:    cmdCfg.Workers,
 			ProcessingJobRetries: retries,
+			ResyncInterval:       cmdCfg.ResyncInterval,
 		})
 		if err != nil {
 			return fmt.Errorf("could not create backend auth kubernetes controller: %w", err)
@@ -193,6 +194,9 @@ func Run() error {
 			Name:                 "bilrost-controller-ingressauth",
 			ConcurrentWorkers:    cmdCfg.Workers,
 			ProcessingJobRetries: retries,
+			// This controller is for secondary resources, we resync with the primary resource,
+			// we only want updates on this one so we can be faster on secondary resource updates.
+			DisableResync: true,
 		})
 		if err != nil {
 			return fmt.Errorf("could not create backend auth kubernetes controller: %w", err)
