@@ -1,4 +1,8 @@
-# Bilrost
+<p align="center">
+    <img src="docs/img/logo.png" width="30%" align="center" alt="bilrost">
+</p>
+
+# Bilrost [![Build Status][ci-image]][ci-url] [![Go Report Card][goreport-image]][goreport-url]
 
 Setting OAUTH2/OIDC in Kubernetes running apps should be easy, Bilrost solves this and removes the pain.
 
@@ -248,7 +252,10 @@ Anyway, if you want support for other kinds of auth backends and/or proxies, ple
 
 Well is another name for [Bifrost], but there are a lot of projects called Bifrost, including in Kubernetes landscape.
 
-
+[ci-image]: https://github.com/slok/bilrost/workflows/CI/badge.svg
+[ci-url]: https://github.com/slok/bilrost/actions
+[goreport-image]: https://goreportcard.com/badge/github.com/slok/bilrost
+[goreport-url]: https://goreportcard.com/report/github.com/slok/bilrost
 [mitm]: https://en.wikipedia.org/wiki/Man-in-the-middle_attack
 [Dex]: https://github.com/dexidp/dex
 [oauth2-proxy]: https://github.com/oauth2-proxy/oauth2-proxy
