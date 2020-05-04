@@ -9,9 +9,6 @@ metadata:
   name: authbackends.auth.bilrost.slok.dev
 spec:
   additionalPrinterColumns:
-  - JSONPath: .metadata.name
-    name: NAME
-    type: string
   - JSONPath: .metadata.creationTimestamp
     name: AGE
     type: date

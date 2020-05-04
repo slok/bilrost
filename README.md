@@ -2,9 +2,9 @@
 
 Setting OAUTH2/OIDC in Kubernetes running apps should be easy, Bilrost achieves this and removes the pain easily.
 
-Bilrost is a kubernetes controller/operator to set up OAUTH2/OIDC on any ingress based service. It doesn't care  what ingress controller do you use, supports multiple auth bakckends and multiple OAUTH2/OIDC proxies.
+Bilrost is a kubernetes controller/operator to set up OAUTH2/OIDC on any ingress based service. It doesn't care  what ingress controller do you use and can support multiple auth backends and multiple OAUTH2/OIDC proxies.
 
-Bilrost will register/create OAUTH2/OIDC clients, create secrets, setup proxies, rollback if required. Ina few words, it automates the ugly work of setting the OAUTH2/OIDC security in your applications.
+Bilrost will register/create OAUTH2/OIDC clients, create secrets, setup proxies, rollback if required... In a few words, it automates the ugly work of setting the OAUTH2/OIDC security in your applications.
 
 ## Features
 
@@ -13,9 +13,7 @@ Bilrost will register/create OAUTH2/OIDC clients, create secrets, setup proxies,
 - Heals automatically (controller pattern/feedback loop).
 - Support multiple auth backends implementations (easy to add new ones).
 - Supports multiple proxy implementations (easy to add new ones).
-- Two modes of securing ingresses/apps
-  - `simple` by using ingress annotations.
-  - `advanced` by using CRDs to express more securing options.
+- Two modes of securing ingresses/app `simple` and `advanced`.
 - Prometheus metrics ready.
 - Have infinite different auth backends, e.g:
   - Dex with Github for developers ingresses.
@@ -31,19 +29,19 @@ Bilrost will register/create OAUTH2/OIDC clients, create secrets, setup proxies,
 Bilrost needs 2 things:
 
 - The `AuthBackend` is a cluster scoped CRD that has the data to be able to interact with the auth backend system of your election, for example [Dex].
-- The application to be secured, this can be achieved in 2 modes:
-  - Simple: An ingress annotation that points to the auth backend that needs to be used to secure that service.
-  - Advanced: A CRD that has the data of how to secure the app and points to the ingress and setup the proxy.
+- The public application to be secured, this can be achieved in 2 ways:
+  - First select the ingress to be secured by adding an annotation that points to the auth backend that will act as the auth entity.
+  - As an optional step, along with the ingress annotatiton you can set advanced settings for the proxy using a CR called `IngressAuth`, this has the same name and namespace as the ingress.
 
-As you see, this way of splitting the concerns makes the applications being secured have no need to know about how the security backends work not provide data. The `AuthBackends` could be created by different people/roles/apps and be there to be used by the people/roles/apps that secure applications.
+After this Bilrost is ready to start the setup of a secure oauth2/oidc application like this:
 
 ![kubernetes-architecture](docs/img/k8s-architecture.png)
 
-As you see in the high level architecture graph, before Bilrost you have the regular setup of ingress->service->pods. After securing with Bilrost, this will set up a proxy in a kind of [MitM][mitm] style, so every request that forwards from the ingress to the service, will need to go through the OAUTH2/OIDC proxy that has been configured and registered with an auth backend, so the OAUTH2/OIDC flow is triggered.
+As you see in the high level architecture graph, before Bilrost you have the regular setup of ingress->service->pods. After securing with Bilrost, it will set up a proxy in a kind of [MitM][mitm] style, so every request that forwards from the ingress to the service, will need to go through the OAUTH2/OIDC proxy that has been configured and registered with an auth backend, so the OAUTH2/OIDC flow is triggered. This is how eliminates the need of a specific ingress controller and is compatible with any setup.
 
 ## Getting started
 
-The requiremets are:
+The requirements are:
 
 - A running and working Dex.
 - The Auth backend CRD registered and a running Bilrost (check [manifests]).
@@ -64,7 +62,7 @@ spec:
     apiAddress: dex.auth.svc.cluster.local:81
 ```
 
-Now you need to select this backend, we will use the simple way of using the Bilrost's ingress annotation (`auth.bilrost.slok.dev/backend`) and let the magic happen (this example is for an app available at `https://app.my.cluster.slok.dev` and a service `app`, namespace `app`):
+Now you need to select this backend, to do this you will need to use the bilrost backed ingress annotation `auth.bilrost.slok.dev/backend` (**The annotation is mandatory**). and let the magic happen (this example is for an app available at `https://app.my.cluster.slok.dev` and a service `app`, namespace `app`):
 
 ```yaml
 apiVersion: extensions/v1beta1
@@ -83,7 +81,29 @@ spec:
               serviceName: app
               servicePort: 80
             path: /
+```
 
+In case you want (**The CR is optional**) to set advanced settings to secure the app instead of the defaults you can use a CRD that should live in the same namespace of the ingress and the same name. e.g
+
+```yaml
+apiVersion: auth.bilrost.slok.dev/v1
+kind: IngressAuth
+metadata:
+  name: app
+  namespace: app
+spec:
+  authSettings:
+    scopeOrClaims: ["email", "profile", "groups", "offline_access"]
+  oauth2Proxy:
+    image: "quay.io/oauth2-proxy/oauth2-proxy:latest"
+    replicas: 4
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "250m"
+      limits:
+        memory: "128Mi"
+        cpu: "500m"
 ```
 
 ## Advanced examples
@@ -120,15 +140,29 @@ Yes, Bilrost will detect that the ingress is no longer require to be secured and
 
 Apart from the regular interval reconcliation (every 3m).
 
-- Updates on ingresses
-- Updates on `AppSecurity` CRs.
-- Update on Bilrost generated `Services`, `Secrets`, `Deployments`.
+- Updates on `Ingress` core resources.
+- Updates on `IngressAuth` custom resources (CR).
+
 
 ### I'm not happy with the default proxy settings
 
-It's ok, use the CRs in case you want special settings for the proxy, like number of replicas or setting resources.
+It's ok, use the `IngressAuth` CR in case you want special settings for the proxy, like number of replicas or setting resources.
 
-The ingress annotation method is a fast and simple way of enabling and disabling security, make tests and enable security in a temporary way.
+The ingress annotation method without CR is a fast and simple way of enabling and disabling security, make tests and enable security in a temporary way.
+
+### If I use the CR, do I need to use the ingress annotation?
+
+Yes, at the begginning we though of use the annotation or the CR to enable, but that opens corner cases and adds internal complexity, that translates in bugs.
+
+Making the annotation a requirement also has good side effects, like:
+
+Only have a single way of enabling/disabling bilrost security on an ingress, the annotation. If not this could mean that sometimes you would enable this with an annotation and others wiht the CR and we don't like making the same thing in different ways.
+
+Also, although you can have the CR present, with the annotation you can enable and disable the security in a fast way without the need of deleting resources.
+
+### Do you support https `Service`s
+
+No, this will come with an avialable setting in the `IngressAuth` CR. By default and without advanced options will be http.
 
 ### In what state is this controller?
 

@@ -32,6 +32,10 @@ func (c *FakeAuthV1) AuthBackends() v1.AuthBackendInterface {
 	return &FakeAuthBackends{c}
 }
 
+func (c *FakeAuthV1) IngressAuths(namespace string) v1.IngressAuthInterface {
+	return &FakeIngressAuths{c, namespace}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeAuthV1) RESTClient() rest.Interface {

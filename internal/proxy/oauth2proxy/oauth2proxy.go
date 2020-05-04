@@ -19,10 +19,6 @@ import (
 	"github.com/slok/bilrost/internal/proxy"
 )
 
-var (
-	defaultScopes = []string{"openid", "email", "profile", "groups", "offline_access"}
-)
-
 // KubernetesRepository is the proxy kubernetes service used to communicate with Kubernetes.
 type KubernetesRepository interface {
 	EnsureDeployment(ctx context.Context, dep *appsv1.Deployment) error
@@ -51,11 +47,6 @@ func NewOIDCProvisioner(kuberepo KubernetesRepository, logger log.Logger) proxy.
 }
 
 func (p provisioner) Provision(ctx context.Context, settings proxy.OIDCProxySettings) error {
-	// Set defaults.
-	if len(settings.Scopes) == 0 {
-		settings.Scopes = defaultScopes
-	}
-
 	// Provision proxy.
 	secret, err := p.provisionSecret(ctx, settings)
 	if err != nil {
@@ -87,13 +78,13 @@ const (
 )
 
 func (p provisioner) provisionSecret(ctx context.Context, settings proxy.OIDCProxySettings) (*corev1.Secret, error) {
-	name := getResourceName(settings.IngressName)
+	name := getResourceName(settings.App.Ingress.Name)
 	labels := getLabels(name)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: settings.IngressNamespace,
+			Namespace: settings.App.Ingress.Namespace,
 			Labels:    labels,
 		},
 		Type: corev1.SecretTypeOpaque,
@@ -113,7 +104,6 @@ func (p provisioner) provisionSecret(ctx context.Context, settings proxy.OIDCPro
 
 func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OIDCProxySettings, secret *corev1.Secret) (*appsv1.Deployment, error) {
 	const proxyInternalPort = 4180
-	replicas := int32(1)
 
 	// For consistency we will create everything with the same names and labels.
 	name := secret.Name
@@ -131,6 +121,8 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 	}
 	checksumLabels["bilrost.slok.dev/secret-checksum-to-force-update"] = checksum
 
+	customSettings := getCustomizableSettings(settings)
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -139,7 +131,7 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 			// TODO(slok): Use owner refs or apply our finalizers?.
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: &replicas,
+			Replicas: &customSettings.Replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
@@ -151,7 +143,7 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 					Containers: []corev1.Container{
 						{
 							Name:  "app",
-							Image: "quay.io/oauth2-proxy/oauth2-proxy:v5.1.0",
+							Image: customSettings.Image,
 							Args: []string{
 								fmt.Sprintf(`--oidc-issuer-url=%s`, settings.IssuerURL),
 								fmt.Sprintf(`--client-id=$(%s)`, oidcClientIDEnv),
@@ -160,7 +152,7 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 								fmt.Sprintf(`--http-address=0.0.0.0:%d`, proxyInternalPort),
 								fmt.Sprintf(`--redirect-url=%s/oauth2/callback`, settings.URL),
 								fmt.Sprintf(`--upstream=%s`, settings.UpstreamURL),
-								fmt.Sprintf(`--scope=%s`, strings.Join(settings.Scopes, " ")),
+								fmt.Sprintf(`--scope=%s`, strings.Join(customSettings.Scopes, " ")),
 								`--cookie-secret=test`,
 								`--cookie-secure=false`,
 								`--provider=oidc`,
@@ -174,13 +166,7 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 									Protocol:      "TCP",
 								},
 							},
-							Resources: corev1.ResourceRequirements{
-								// TODO(slok): Do we need limits?
-								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("15m"),
-									corev1.ResourceMemory: resource.MustParse("20Mi"),
-								},
-							},
+							Resources: customSettings.Resources,
 							EnvFrom: []corev1.EnvFromSource{{
 								SecretRef: &corev1.SecretEnvSource{
 									LocalObjectReference: corev1.LocalObjectReference{
@@ -201,6 +187,50 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 	}
 
 	return deployment, nil
+}
+
+type customizableSettings struct {
+	Image     string
+	Scopes    []string
+	Replicas  int32
+	Resources corev1.ResourceRequirements
+}
+
+func getCustomizableSettings(settings proxy.OIDCProxySettings) customizableSettings {
+	defaults := customizableSettings{
+		Image:    "quay.io/oauth2-proxy/oauth2-proxy:v5.1.0",
+		Scopes:   []string{"openid", "email", "profile", "groups", "offline_access"},
+		Replicas: int32(2),
+		Resources: corev1.ResourceRequirements{
+			// TODO(slok): Do we need limits?
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("15m"),
+				corev1.ResourceMemory: resource.MustParse("20Mi"),
+			},
+		},
+	}
+
+	// Set custom settings.
+	if len(settings.App.ProxySettings.Scopes) > 0 {
+		defaults.Scopes = settings.App.ProxySettings.Scopes
+	}
+
+	if settings.App.ProxySettings.Oauth2Proxy == nil {
+		return defaults
+	}
+
+	if settings.App.ProxySettings.Oauth2Proxy.Image != "" {
+		defaults.Image = settings.App.ProxySettings.Oauth2Proxy.Image
+	}
+	if settings.App.ProxySettings.Oauth2Proxy.Replicas != 0 {
+		defaults.Replicas = int32(settings.App.ProxySettings.Oauth2Proxy.Replicas)
+	}
+
+	if settings.App.ProxySettings.Oauth2Proxy.Resources != nil {
+		defaults.Resources = *settings.App.ProxySettings.Oauth2Proxy.Resources
+	}
+
+	return defaults
 }
 
 const (
@@ -243,11 +273,11 @@ func (p provisioner) provisionDeploymentService(ctx context.Context, dep *appsv1
 
 func (p provisioner) setIngressToProxy(ctx context.Context, settings proxy.OIDCProxySettings) error {
 	proxyBackend := networkingv1beta1.IngressBackend{
-		ServiceName: getResourceName(settings.IngressName),
+		ServiceName: getResourceName(settings.App.Ingress.Name),
 		ServicePort: intstr.FromString(proxySvcName),
 	}
 
-	err := p.updateIngressBackend(ctx, settings.IngressNamespace, settings.IngressName, proxyBackend)
+	err := p.updateIngressBackend(ctx, settings.App.Ingress.Namespace, settings.App.Ingress.Name, proxyBackend)
 	if err != nil {
 		return fmt.Errorf("could not point ingress to secured proxy: %w", err)
 	}
@@ -324,7 +354,7 @@ func (p provisioner) updateIngressBackend(ctx context.Context, ns, name string, 
 	// Do we need to update the ingress?
 	currentBackend := ing.Spec.Rules[0].HTTP.Paths[0].Backend
 	if currentBackend == newBackend {
-		p.logger.Debugf("ingress already pointing to %s:%s service, ignoring update", newBackend.ServiceName, newBackend.ServicePort)
+		p.logger.Debugf("ingress already pointing to %s:%v service, ignoring update", newBackend.ServiceName)
 		return nil
 	}
 
