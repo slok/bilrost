@@ -73,13 +73,18 @@ func (p provisioner) Provision(ctx context.Context, settings proxy.OIDCProxySett
 }
 
 const (
-	oidcClientIDEnv     = "OIDC_CLIENT_ID"
-	oidcClientSecretEnv = "OIDC_CLIENT_SECRET"
+	oidcClientIDEnv      = "OIDC_CLIENT_ID"
+	oidcClientSecretEnv  = "OIDC_CLIENT_SECRET"
+	proxyCookieSecretEnv = "PROXY_COOKIE_SECRET"
 )
 
 func (p provisioner) provisionSecret(ctx context.Context, settings proxy.OIDCProxySettings) (*corev1.Secret, error) {
 	name := getResourceName(settings.App.Ingress.Name)
 	labels := getLabels(name)
+
+	// Idempotent cookie secret seed based on clientID and clientSecret.
+	cookieSecretMd5 := md5.Sum([]byte(fmt.Sprintf("%s-%s", settings.ClientID, settings.ClientSecret)))
+	cookieSecret := fmt.Sprintf("%x", cookieSecretMd5)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -89,8 +94,9 @@ func (p provisioner) provisionSecret(ctx context.Context, settings proxy.OIDCPro
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
-			oidcClientIDEnv:     []byte(settings.ClientID),
-			oidcClientSecretEnv: []byte(settings.ClientSecret),
+			oidcClientIDEnv:      []byte(settings.ClientID),
+			oidcClientSecretEnv:  []byte(settings.ClientSecret),
+			proxyCookieSecretEnv: []byte(cookieSecret),
 		},
 	}
 
@@ -153,7 +159,7 @@ func (p provisioner) provisionDeployment(ctx context.Context, settings proxy.OID
 								fmt.Sprintf(`--redirect-url=%s/oauth2/callback`, settings.URL),
 								fmt.Sprintf(`--upstream=%s`, settings.UpstreamURL),
 								fmt.Sprintf(`--scope=%s`, strings.Join(customSettings.Scopes, " ")),
-								`--cookie-secret=test`,
+								fmt.Sprintf(`--cookie-secret=$(%s)`, proxyCookieSecretEnv),
 								`--cookie-secure=false`,
 								`--provider=oidc`,
 								`--skip-provider-button`,

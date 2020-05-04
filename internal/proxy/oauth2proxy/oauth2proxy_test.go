@@ -79,7 +79,7 @@ func getBaseLabels() map[string]string {
 func getBaseDeployment() *appsv1.Deployment {
 	replicas := int32(2)
 	checkSumLabels := getBaseLabels()
-	checkSumLabels["bilrost.slok.dev/secret-checksum-to-force-update"] = "fcf3c8b4319dc73b54608b9fe857b39d"
+	checkSumLabels["bilrost.slok.dev/secret-checksum-to-force-update"] = "6310c0ad4266de889e142b381343c55e"
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -109,11 +109,11 @@ func getBaseDeployment() *appsv1.Deployment {
 								"--redirect-url=https://my-app.my-cluster.dev/oauth2/callback",
 								"--upstream=http://my-app.my-ns.svc.cluster.local:8080",
 								"--scope=openid email profile groups offline_access",
-								`--cookie-secret=test`,
-								`--cookie-secure=false`,
-								`--provider=oidc`,
+								"--cookie-secret=$(PROXY_COOKIE_SECRET)",
+								"--cookie-secure=false",
+								"--provider=oidc",
 								"--skip-provider-button",
-								`--email-domain=*`,
+								"--email-domain=*",
 							},
 							Ports: []corev1.ContainerPort{
 								{
@@ -166,11 +166,11 @@ func getCustomDeployment() *appsv1.Deployment {
 		"--redirect-url=https://my-app.my-cluster.dev/oauth2/callback",
 		"--upstream=http://my-app.my-ns.svc.cluster.local:8080",
 		"--scope=c9 c19 c29",
-		`--cookie-secret=test`,
-		`--cookie-secure=false`,
-		`--provider=oidc`,
+		"--cookie-secret=$(PROXY_COOKIE_SECRET)",
+		"--cookie-secure=false",
+		"--provider=oidc",
 		"--skip-provider-button",
-		`--email-domain=*`,
+		"--email-domain=*",
 	}
 
 	return d
@@ -206,8 +206,9 @@ func getBaseSecret() *corev1.Secret {
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
-			"OIDC_CLIENT_ID":     []byte("my-app-bilrost"),
-			"OIDC_CLIENT_SECRET": []byte("my-secret"),
+			"OIDC_CLIENT_ID":      []byte("my-app-bilrost"),
+			"OIDC_CLIENT_SECRET":  []byte("my-secret"),
+			"PROXY_COOKIE_SECRET": []byte("cc00ba6b82692c7c95ec8b6acb16aa39"),
 		},
 	}
 }
