@@ -1,0 +1,116 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: bilrost
+rules:
+  - apiGroups: ["auth.bilrost.slok.dev"]
+    resources: ["*"]
+    verbs: ["*"]
+  
+  - apiGroups: [""]
+    resources: ["secrets", "services"]
+    verbs: ["*"]
+
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["*"]
+
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["list", "get", "update", "watch"]
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: bilrost
+  namespace: bilrost
+  labels:
+    app: bilrost
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: bilrost
+  namespace: bilrost
+  labels:
+    app: bilrost
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: bilrost
+subjects:
+  - kind: ServiceAccount
+    name: bilrost
+    namespace: bilrost
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bilrost
+  namespace: bilrost
+  labels:
+    app: bilrost
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bilrost
+  template:
+    metadata:
+      labels:
+        app: bilrost
+    spec:
+      serviceAccountName: bilrost
+      containers:
+        - name: bilrost
+          image: slok/bilrost:latest
+          args:
+            - --namespace-running=$(MY_POD_NAMESPACE)
+          ports:
+            - containerPort: 8081
+              name: metrics
+              protocol: TCP
+          env:
+            - name: MY_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+
+# In case you want metrics:
+#
+#---
+#kind: Service
+#apiVersion: v1
+#metadata:
+#  name: bilrost
+#  namespace: bilrost
+#  labels:
+#    app: bilrost
+#spec:
+#  selector:
+#    app: bilrost
+#  type: ClusterIP
+#  ports:
+#    - name: metrics
+#      port: 8081
+#
+#---
+#apiVersion: monitoring.coreos.com/v1
+#kind: ServiceMonitor
+#metadata:
+#  name: bilrost
+#  namespace: bilrost
+#  labels:
+#    app: bilrost
+#    prometheus: prometheus
+#spec:
+#  selector:
+#    matchLabels:
+#      app: bilrost
+#  endpoints:
+#    - port: metrics
+#
