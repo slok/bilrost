@@ -23,5 +23,5 @@ docker run -it --rm \
 	-v ${ROOT_DIRECTORY}:/src \
 	-e GO_PROJECT_ROOT=/src \
 	-e CRD_TYPES_PATH=/src/pkg/apis \
-	-e CRD_OUT_PATH=/src/manifests \
+	-e CRD_OUT_PATH=/src/manifests/crd \
 	${IMAGE_CRD_GEN} update-crd.sh
