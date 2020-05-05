@@ -83,6 +83,11 @@ type AuthSettings struct {
 
 // Oauth2ProxyAuthProxySource has the configuration of an oauth2proxy
 type Oauth2ProxyAuthProxySource struct {
+	CommonProxySettings `json:",inline"`
+}
+
+// CommonProxySettings are settings that all proxies will have.
+type CommonProxySettings struct {
 	Image     string                       `json:"image,omitempty"`
 	Replicas  int                          `json:"replicas,omitempty"`
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`

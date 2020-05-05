@@ -65,16 +65,18 @@ func getBaseIngressAuth() *authv1.IngressAuth {
 			},
 			AuthProxySource: authv1.AuthProxySource{
 				Oauth2Proxy: &authv1.Oauth2ProxyAuthProxySource{
-					Image:    "quay.io/oauth2-proxy/oauth2-proxy:v5.1.0",
-					Replicas: 4,
-					Resources: &corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("15m"),
-							corev1.ResourceMemory: resource.MustParse("20Mi"),
-						},
-						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("30m"),
-							corev1.ResourceMemory: resource.MustParse("45Mi"),
+					CommonProxySettings: authv1.CommonProxySettings{
+						Image:    "quay.io/oauth2-proxy/oauth2-proxy:v5.1.0",
+						Replicas: 4,
+						Resources: &corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("15m"),
+								corev1.ResourceMemory: resource.MustParse("20Mi"),
+							},
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("30m"),
+								corev1.ResourceMemory: resource.MustParse("45Mi"),
+							},
 						},
 					},
 				},
