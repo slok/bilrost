@@ -153,7 +153,13 @@ But if you use [Skipper], [Traefik] or any other ingress controller, you can use
 
 ### How can I deploy Bilrost?
 
-Check [deployment example][bilrost-deployment]
+Check [deployment example][bilrost-deployment].
+
+You have docker images ready in the [container image repository][docker-repository]
+
+```bash
+docker pull slok/bilrost
+```
 
 ### Where are the CRDs?
 
@@ -269,3 +275,4 @@ Well is another name for [Bifrost], but there are a lot of projects called Bifro
 [Traefik]: https://github.com/containous/traefik
 [nginx-controller]: https://github.com/kubernetes/ingress-nginx
 [Prometheus]: https://prometheus.io/
+[docker-repository]: https://hub.docker.com/r/slok/bilrost
