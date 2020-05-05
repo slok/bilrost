@@ -8,7 +8,9 @@ Setting OAUTH2/OIDC in Kubernetes running apps should be easy, Bilrost solves th
 
 Bilrost is a kubernetes controller/operator to set up OAUTH2/OIDC on any ingress based service. It doesn't care  what ingress controller do you use, it supports multiple auth backends and multiple OAUTH2/OIDC proxies.
 
-Bilrost will register/create OAUTH2/OIDC clients, create secrets, setup proxies, rollback if required... In a few words, it automates the ugly work of setting the OAUTH2/OIDC security in your applications.
+Bilrost will register/create OAUTH2/OIDC clients, create secrets, setup proxies, rollback if required...
+
+In a few words, it automates the ugly work of setting the OAUTH2/OIDC security in your applications.
 
 ## Table of contents
 
@@ -58,7 +60,8 @@ As you see in the high level architecture graph, before Bilrost you have the reg
 The requirements are:
 
 - A running and working Dex.
-- The Auth backend CRD registered and a running Bilrost (check [manifests]).
+- The Auth backend CRD registered (apply the [CRD]s).
+- A running Bilrost (check [this][bilrost-deployment] as an example).
 - An ingress that points to a running application (service, pods...).
 
 This is an example, you will need to change the settings accordingly.
@@ -189,7 +192,7 @@ If you delete those secrets, on the next resync interval, Bilrost will generate 
 
 You only need one bilrost per cluster, this Bilrost instance needs to manage deployments, secrets, ingresses... outside its namespace, this means that needs to access at a cluster scope level.
 
-If you are concerned about this cluster wide security you can use multiple role bindings, one `ClusterRoleBinding` for cluster scope resources (`AuthBackends`) and multiple `RoleBinding` for each namespace access you want Bilrst access namespaced resources (`Secrets`, `Ingress`, `IngressAuth`, `Deployments`).
+If you are concerned about this cluster wide security you can use multiple role bindings, one `ClusterRoleBinding` for cluster scope resources (`AuthBackends`) and multiple `RoleBinding` for each namespace you want Bilrost to access the namespaced resources (`Secrets`, `Ingresses`, `IngressAuths`, `Deployments`).
 
 ### Can I rollback a secured application?
 
@@ -197,7 +200,6 @@ Yes, Bilrost will detect that the ingress is no longer require to be secured and
 
 - Deleting the ingress annotation.
 - Deleting the ingress.
-- Deleting security CRD.
 
 ### What triggers a reconciliation loop?
 
@@ -207,7 +209,7 @@ Yes, Bilrost will detect that the ingress is no longer require to be secured and
 
 ### I'm not happy with the default proxy settings
 
-It's ok, use the `IngressAuth` CR in case you want special settings for the proxy, like number of replicas or setting resources.
+It's ok, use the `IngressAuth` CR in case you want special settings for the proxy, like number of replicas or custom resources.
 
 The ingress annotation method without CR is a fast and simple way of enabling and disabling security, make tests and enable security in a temporary way.
 
@@ -225,23 +227,29 @@ Also, although you can have the CR present, with the annotation you can enable a
 
 Yes, we support [Prometheus] metrics, by default metrics will be served in `0.0.0.0:8081/metrics`.
 
-### Do you support https `Service`s
+### Do you support https `Service`s?
 
-No, this will come with an avialable setting in the `IngressAuth` CR. By default and without advanced options will be http.
+No at this moment, this will come with an available setting in the `IngressAuth` CR. By default and without advanced options will be http.
 
 ### In what state is this controller?
 
-Is not stable yet.
+The controller is very new, but is stable enough, although we are sure that lacks of some functionality or has bugs.
 
 If you are using it a medium-big scale please let us know how is working in case we need to optimize or fix parts of the controller.
 
 ### Is this another ingress controller?
 
-Well is an ingress controller, but only sets up OAUTH2/OIDC security, it has small responsibility, so in other words no, this will not replace Ngix, Skipper, Traefik...
+Yes and no, is an ingress controller, but only sets up OAUTH2/OIDC security, it has small responsibility, so in other words no as a full ingress controller, this will not replace Nginx, Skipper, Traefik...
 
 ### How about having multiple Bilrost instances?
 
 Although is not required because of its async nature and you could configure the number of workers to run, should be safe to have multiple instances, and in case of sharding you could have instances per namespace if you want.
+
+### Why running a proxy server instead using the ingress controller servers?
+
+Well, this is the way of not requiring any particular ingress setup. Nevertheless we plan to support ingress-controller based annotations, so users have the option of removing the proxy instances.
+
+For now, this proxy approach makes easy to abstract the architecture in place and setup easy OAUTH2/OIDC security.
 
 ### Are you planning to support more auth backends and proxies?
 
@@ -249,7 +257,7 @@ Yes.
 
 In the short term we are planning Auth0 `AuthBackend` as an alternative to Dex.
 
-Regarding auth proxy we are planning what would it take to support [nginx-controller] annotation and setup process, if it makes sense we could do it.
+Regarding auth proxies we are planning what would it take to support ingress controller based annotations like [nginx-controller] annotation, this would remove the burden, resources and PoFs of related with the auth proxy instances.
 
 Anyway, if you want support for other kinds of auth backends and/or proxies, please open an Issue, that would be awesome.
 
