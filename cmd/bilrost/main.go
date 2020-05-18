@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/oklog/run"
 	"github.com/prometheus/client_golang/prometheus"
@@ -112,7 +113,9 @@ func Run() error {
 				return server.ListenAndServe()
 			},
 			func(_ error) {
-				err := server.Shutdown(context.Background())
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				err := server.Shutdown(ctx)
 				if err != nil {
 					logger.Errorf("error shutting down metrics server: %w", err)
 				}
