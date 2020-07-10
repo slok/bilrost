@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	koopercontroller "github.com/spotahome/kooper/controller"
+	koopercontroller "github.com/spotahome/kooper/v2/controller"
 )
 
 // Recorder must be satisfied by all the backends that want to implement

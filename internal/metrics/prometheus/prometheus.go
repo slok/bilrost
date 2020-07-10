@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	koopercontroller "github.com/spotahome/kooper/controller"
-	kooperprometheus "github.com/spotahome/kooper/metrics/prometheus"
+	koopercontroller "github.com/spotahome/kooper/v2/controller"
+	kooperprometheus "github.com/spotahome/kooper/v2/metrics/prometheus"
 
 	"github.com/slok/bilrost/internal/metrics"
 )
