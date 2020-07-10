@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/spotahome/kooper/controller"
+	"github.com/spotahome/kooper/v2/controller"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
