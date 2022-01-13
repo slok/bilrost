@@ -11,7 +11,7 @@ type AuthBackend struct {
 	Dex *AuthBackendDex
 }
 
-// AuthBackendDex is the configuraiton of dex AuthBackend.
+// AuthBackendDex is the configuration of dex AuthBackend.
 type AuthBackendDex struct {
 	APIURL    string
 	PublicURL string
@@ -26,7 +26,7 @@ type App struct {
 	ProxySettings ProxySettings
 }
 
-// KubernetesIngress is the kubernetes service related to the App
+// KubernetesIngress is the kubernetes service related to the App.
 type KubernetesIngress struct {
 	Name      string
 	Namespace string

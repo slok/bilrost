@@ -142,7 +142,7 @@ func TestHandler(t *testing.T) {
 		mock   func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service)
 		expErr bool
 	}{
-		"If we try handling an object that we are not supose to handle it should not be handled.": {
+		"If we try handling an object that we are not suppose to handle it should not be handled.": {
 			obj: func() runtime.Object {
 				return &corev1.Pod{}
 			},
@@ -455,7 +455,7 @@ func TestHandler(t *testing.T) {
 			},
 		},
 
-		"An ingress that has been deleted and already cleaned shoudl be ignored.": {
+		"An ingress that has been deleted and already cleaned should be ignored.": {
 			obj: func() runtime.Object {
 				ing := getBaseIngress()
 				ing.Annotations = map[string]string{

@@ -37,7 +37,7 @@ type AuthBackendDex struct {
 	APIAddress string `json:"apiAddress"`
 }
 
-// AuthBackendStatus is the auth backend  status
+// AuthBackendStatus is the auth backend status.
 type AuthBackendStatus struct{}
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -50,7 +50,7 @@ type AuthBackendList struct {
 	Items []AuthBackend `json:"items"`
 }
 
-// IngressAuth represents a auth configuraiton for an ingress.
+// IngressAuth represents a auth configuration for an ingress.
 //
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -81,7 +81,7 @@ type AuthSettings struct {
 	ScopeOrClaims []string `json:"scopeOrClaims,omitempty"`
 }
 
-// Oauth2ProxyAuthProxySource has the configuration of an oauth2proxy
+// Oauth2ProxyAuthProxySource has the configuration of an oauth2proxy.
 type Oauth2ProxyAuthProxySource struct {
 	CommonProxySettings `json:",inline"`
 }

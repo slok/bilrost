@@ -7,7 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	dexapi "github.com/dexidp/dex/api"
+	dexapi "github.com/dexidp/dex/api/v2"
 	"google.golang.org/grpc"
 	corev1 "k8s.io/api/core/v1"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -129,9 +129,9 @@ func (a appRegisterer) getAndCreateSecret(ctx context.Context, app authbackend.O
 
 	// Check if we already have a secret.
 	name := getSecretName(app.ID)
-	kSecret, err := a.kuberepo.GetSecret(ctx, a.runningNamespace, name)
+	kubeSecret, err := a.kuberepo.GetSecret(ctx, a.runningNamespace, name)
 	if err == nil {
-		secret := string(kSecret.Data[clientSecretKey])
+		secret := string(kubeSecret.Data[clientSecretKey])
 		// If we have the secret, then we don't need to create a new one.
 		if secret != "" {
 			return secret, false, nil
@@ -187,7 +187,7 @@ func (a appRegisterer) getAndCreateSecret(ctx context.Context, app authbackend.O
 // Dex doesn't update the client secret if the app already exists so if we create
 // always the client doesn't matter if we had created a new secret, this will be
 // ignored by dex and we will end with inconsistencies (with Dex having an old secret
-// for the client). So this flag will be used when we want recreate the cleint
+// for the client). So this flag will be used when we want recreate the client.
 func (a appRegisterer) registerOnDex(ctx context.Context, app authbackend.OIDCApp, secret string, recreate bool) error {
 	if recreate {
 		req := &dexapi.DeleteClientReq{Id: app.ID}

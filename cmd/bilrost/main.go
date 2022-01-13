@@ -33,7 +33,10 @@ import (
 )
 
 // Run runs the main application.
-func Run() error {
+func Run(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	// Load command flags and arguments.
 	cmdCfg, err := NewCmdConfig()
 	if err != nil {
@@ -55,18 +58,18 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("could not load K8S configuration: %w", err)
 	}
-	kBilrostCli, err := kubernetesclient.BaseFactory.NewBilrostClient(context.TODO(), kcfg)
+	kubeBilrostCli, err := kubernetesclient.BaseFactory.NewBilrostClient(context.TODO(), kcfg)
 	if err != nil {
 		return fmt.Errorf("could not create K8S Bilrost client: %w", err)
 	}
-	kCoreCli, err := kubernetesclient.BaseFactory.NewCoreClient(context.TODO(), kcfg)
+	kubeCoreCli, err := kubernetesclient.BaseFactory.NewCoreClient(context.TODO(), kcfg)
 	if err != nil {
 		return fmt.Errorf("could not create K8S core client: %w", err)
 	}
 
 	// Create main dependencies.
 	metricsRecorder := bilrostprometheus.NewRecorder(prometheus.DefaultRegisterer)
-	kubeSvc := kubernetes.NewMeasuredService(metricsRecorder, kubernetes.NewService(kCoreCli, kBilrostCli, logger))
+	kubeSvc := kubernetes.NewMeasuredService(metricsRecorder, kubernetes.NewService(kubeCoreCli, kubeBilrostCli, logger))
 	proxyProvisioner := proxy.NewMeasuredOIDCProvisioner(
 		"oauth2proxy",
 		metricsRecorder,
@@ -151,9 +154,12 @@ func Run() error {
 	// The primary controller is based on Ingresses and the secondary controller is based on
 	// IngressAuth CR.
 	//
-	// Both controllers end executing the same reconciliation loop but if anyhting changes in any of
+	// Both controllers end executing the same reconciliation loop but if anything changes in any of
 	// the resources we will reconcile again.
 	{
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
 		const retries = 2
 		handler, err := controller.NewHandler(controller.HandlerConfig{
 			KubernetesRepo: kubeSvc,
@@ -164,7 +170,6 @@ func Run() error {
 			return fmt.Errorf("could not create controller handler: %w", err)
 		}
 
-		ctrlIngStop := make(chan struct{})
 		ctrlIng, err := koopercontroller.New(&koopercontroller.Config{
 			Handler:              handler,
 			Retriever:            controller.NewIngressRetriever(cmdCfg.NamespaceFilter, kubeSvc),
@@ -181,14 +186,13 @@ func Run() error {
 
 		g.Add(
 			func() error {
-				return ctrlIng.Run(ctrlIngStop)
+				return ctrlIng.Run(ctx)
 			},
 			func(_ error) {
-				close(ctrlIngStop)
+				cancel()
 			},
 		)
 
-		ctrlIngAuthStop := make(chan struct{})
 		ctrlIngAuth, err := koopercontroller.New(&koopercontroller.Config{
 			Handler:              handler,
 			Retriever:            controller.NewIngressAuthRetriever(cmdCfg.NamespaceFilter, kubeSvc),
@@ -207,10 +211,10 @@ func Run() error {
 
 		g.Add(
 			func() error {
-				return ctrlIngAuth.Run(ctrlIngAuthStop)
+				return ctrlIngAuth.Run(ctx)
 			},
 			func(_ error) {
-				close(ctrlIngAuthStop)
+				cancel()
 			},
 		)
 	}
@@ -237,7 +241,7 @@ func loadKubernetesConfig(cmdCfg CmdConfig) (*rest.Config, error) {
 	} else {
 		config, err := rest.InClusterConfig()
 		if err != nil {
-			return nil, fmt.Errorf("error loading kubernetes configuration inside cluster, check app is running outside kubernetes cluster or run in development mode: %w", err)
+			return nil, fmt.Errorf("error loading kubernetes configuration ºide cluster, check app is running outside kubernetes cluster or run in development mode: %w", err)
 		}
 		cfg = config
 	}
@@ -250,7 +254,8 @@ func loadKubernetesConfig(cmdCfg CmdConfig) (*rest.Config, error) {
 }
 
 func main() {
-	err := Run()
+	ctx := context.Background()
+	err := Run(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error running application: %s", err)
 		os.Exit(1)

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	dexapi "github.com/dexidp/dex/api"
+	dexapi "github.com/dexidp/dex/api/v2"
 	"google.golang.org/grpc"
 
 	"github.com/slok/bilrost/internal/metrics"

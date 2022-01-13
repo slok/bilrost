@@ -12,28 +12,28 @@ const (
 	version = "v1"
 )
 
-// SchemeGroupVersion is group version used to register these objects
+// SchemeGroupVersion is group version used to register these objects.
 var SchemeGroupVersion = schema.GroupVersion{Group: auth.GroupName, Version: version}
 
-// Kind takes an unqualified kind and returns back a Group qualified GroupKind
+// Kind takes an unqualified kind and returns back a Group qualified GroupKind.
 func Kind(kind string) schema.GroupKind {
 	return VersionKind(kind).GroupKind()
 }
 
-// VersionKind takes an unqualified kind and returns back a Group qualified GroupVersionKind
+// VersionKind takes an unqualified kind and returns back a Group qualified GroupVersionKind.
 func VersionKind(kind string) schema.GroupVersionKind {
 	return SchemeGroupVersion.WithKind(kind)
 }
 
-// Resource takes an unqualified resource and returns a Group qualified GroupResource
+// Resource takes an unqualified resource and returns a Group qualified GroupResource.
 func Resource(resource string) schema.GroupResource {
 	return SchemeGroupVersion.WithResource(resource).GroupResource()
 }
 
 var (
-	// SchemeBuilder initializes a scheme builder
+	// SchemeBuilder initializes a scheme builder.
 	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
-	// AddToScheme is a global function that registers this API group & version to a scheme
+	// AddToScheme is a global function that registers this API group & version to a scheme.
 	AddToScheme = SchemeBuilder.AddToScheme
 )
 

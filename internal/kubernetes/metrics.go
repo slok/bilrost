@@ -34,7 +34,7 @@ func (m MeasuredService) GetAuthBackend(ctx context.Context, id string) (a *mode
 	return m.next.GetAuthBackend(ctx, id)
 }
 
-// GetIngressAuth satisifes multiple interfaces.
+// GetIngressAuth satisfies multiple interfaces.
 func (m MeasuredService) GetIngressAuth(ctx context.Context, namespace, name string) (ia *authv1.IngressAuth, err error) {
 	defer func(t0 time.Time) {
 		m.rec.ObserveKubernetesServiceOperation(ctx, namespace, "GetIngressAuth", err == nil, t0)
@@ -42,7 +42,7 @@ func (m MeasuredService) GetIngressAuth(ctx context.Context, namespace, name str
 	return m.next.GetIngressAuth(ctx, namespace, name)
 }
 
-// ListIngressAuths satisifes multiple interfaces.
+// ListIngressAuths satisfies multiple interfaces.
 func (m MeasuredService) ListIngressAuths(ctx context.Context, namespace string, labelSelector map[string]string) (ial *authv1.IngressAuthList, err error) {
 	defer func(t0 time.Time) {
 		m.rec.ObserveKubernetesServiceOperation(ctx, namespace, "ListIngressAuths", err == nil, t0)
@@ -50,7 +50,7 @@ func (m MeasuredService) ListIngressAuths(ctx context.Context, namespace string,
 	return m.next.ListIngressAuths(ctx, namespace, labelSelector)
 }
 
-// WatchIngressAuths satisifes multiple interfaces.
+// WatchIngressAuths satisfies multiple interfaces.
 func (m MeasuredService) WatchIngressAuths(ctx context.Context, namespace string, labelSelector map[string]string) (i watch.Interface, err error) {
 	defer func(t0 time.Time) {
 		m.rec.ObserveKubernetesServiceOperation(ctx, namespace, "WatchIngressAuths", err == nil, t0)
@@ -58,7 +58,7 @@ func (m MeasuredService) WatchIngressAuths(ctx context.Context, namespace string
 	return m.next.WatchIngressAuths(ctx, namespace, labelSelector)
 }
 
-// EnsureDeployment satisifes oauth2proxy.KubernetesRepository interface.
+// EnsureDeployment satisfies oauth2proxy.KubernetesRepository interface.
 func (m MeasuredService) EnsureDeployment(ctx context.Context, dep *appsv1.Deployment) (err error) {
 	defer func(t0 time.Time) {
 		m.rec.ObserveKubernetesServiceOperation(ctx, dep.Namespace, "EnsureDeployment", err == nil, t0)
@@ -74,7 +74,7 @@ func (m MeasuredService) DeleteDeployment(ctx context.Context, ns, name string) 
 	return m.next.DeleteDeployment(ctx, ns, name)
 }
 
-// EnsureService satisifes oauth2proxy.KubernetesRepository interface.
+// EnsureService satisfies oauth2proxy.KubernetesRepository interface.
 func (m MeasuredService) EnsureService(ctx context.Context, svc *corev1.Service) (err error) {
 	defer func(t0 time.Time) {
 		m.rec.ObserveKubernetesServiceOperation(ctx, svc.Namespace, "EnsureService", err == nil, t0)
@@ -98,7 +98,7 @@ func (m MeasuredService) GetSecret(ctx context.Context, ns, name string) (s *cor
 	return m.next.GetSecret(ctx, ns, name)
 }
 
-// EnsureSecret satisifes oauth2proxy.KubernetesRepository interface.
+// EnsureSecret satisfies oauth2proxy.KubernetesRepository interface.
 func (m MeasuredService) EnsureSecret(ctx context.Context, secret *corev1.Secret) (err error) {
 	defer func(t0 time.Time) {
 		m.rec.ObserveKubernetesServiceOperation(ctx, secret.Namespace, "EnsureSecret", err == nil, t0)
