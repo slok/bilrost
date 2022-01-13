@@ -2,6 +2,13 @@
 
 ## [unreleased]
 
+### Changed
+
+- Add support for Kubernetes 1.23.
+- Update GRPC dependencies.
+- Update Dex dependencies.
+- Drop support for networkingv1beta1.Ingress in favor of networkingv1.Ingress.
+
 ## [0.1.0] - 2020-05-05
 
 ### Added

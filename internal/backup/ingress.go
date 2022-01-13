@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 
 	"github.com/slok/bilrost/internal/log"
 	"github.com/slok/bilrost/internal/model"
@@ -17,8 +17,8 @@ const (
 
 // KubernetesRepository is the proxy kubernetes service used to communicate with Kubernetes.
 type KubernetesRepository interface {
-	GetIngress(ctx context.Context, ns, name string) (*networkingv1beta1.Ingress, error)
-	UpdateIngress(ctx context.Context, ingress *networkingv1beta1.Ingress) error
+	GetIngress(ctx context.Context, ns, name string) (*networkingv1.Ingress, error)
+	UpdateIngress(ctx context.Context, ingress *networkingv1.Ingress) error
 }
 
 //go:generate mockery -case underscore -output backupmock -outpkg backupmock -name KubernetesRepository

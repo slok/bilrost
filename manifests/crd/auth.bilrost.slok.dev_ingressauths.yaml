@@ -28,7 +28,7 @@ spec:
     name: v1
     schema:
       openAPIV3Schema:
-        description: IngressAuth represents a auth configuraiton for an ingress.
+        description: IngressAuth represents a auth configuration for an ingress.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -55,7 +55,7 @@ spec:
                 type: object
               oauth2Proxy:
                 description: Oauth2ProxyAuthProxySource has the configuration of an
-                  oauth2proxy
+                  oauth2proxy.
                 properties:
                   image:
                     type: string

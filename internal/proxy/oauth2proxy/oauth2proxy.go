@@ -10,7 +10,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -27,8 +27,8 @@ type KubernetesRepository interface {
 	DeleteService(ctx context.Context, ns, name string) error
 	EnsureSecret(ctx context.Context, sec *corev1.Secret) error
 	DeleteSecret(ctx context.Context, ns, name string) error
-	GetIngress(ctx context.Context, ns, name string) (*networkingv1beta1.Ingress, error)
-	UpdateIngress(ctx context.Context, ingress *networkingv1beta1.Ingress) error
+	GetIngress(ctx context.Context, ns, name string) (*networkingv1.Ingress, error)
+	UpdateIngress(ctx context.Context, ingress *networkingv1.Ingress) error
 }
 
 //go:generate mockery -case underscore -output oauth2proxymock -outpkg oauth2proxymock -name KubernetesRepository
@@ -278,9 +278,11 @@ func (p provisioner) provisionDeploymentService(ctx context.Context, dep *appsv1
 }
 
 func (p provisioner) setIngressToProxy(ctx context.Context, settings proxy.OIDCProxySettings) error {
-	proxyBackend := networkingv1beta1.IngressBackend{
-		ServiceName: getResourceName(settings.App.Ingress.Name),
-		ServicePort: intstr.FromString(proxySvcName),
+	proxyBackend := networkingv1.IngressBackend{
+		Service: &networkingv1.IngressServiceBackend{
+			Name: getResourceName(settings.App.Ingress.Name),
+			Port: networkingv1.ServiceBackendPort{Name: proxySvcName},
+		},
 	}
 
 	err := p.updateIngressBackend(ctx, settings.App.Ingress.Namespace, settings.App.Ingress.Name, proxyBackend)
@@ -321,16 +323,18 @@ func (p provisioner) Unprovision(ctx context.Context, settings proxy.Unprovision
 }
 
 func (p provisioner) restoreIngress(ctx context.Context, settings proxy.UnprovisionSettings) error {
-	var port intstr.IntOrString
+	var port networkingv1.ServiceBackendPort
 	if p, err := strconv.Atoi(settings.OriginalServicePortOrNamePort); err == nil {
-		port = intstr.FromInt(p)
+		port.Number = int32(p)
 	} else {
-		port = intstr.FromString(settings.OriginalServicePortOrNamePort)
+		port.Name = settings.OriginalServicePortOrNamePort
 	}
 
-	origBackend := networkingv1beta1.IngressBackend{
-		ServiceName: settings.OriginalServiceName,
-		ServicePort: port,
+	origBackend := networkingv1.IngressBackend{
+		Service: &networkingv1.IngressServiceBackend{
+			Name: settings.OriginalServiceName,
+			Port: port,
+		},
 	}
 
 	err := p.updateIngressBackend(ctx, settings.IngressNamespace, settings.IngressName, origBackend)
@@ -341,7 +345,7 @@ func (p provisioner) restoreIngress(ctx context.Context, settings proxy.Unprovis
 	return nil
 }
 
-func (p provisioner) updateIngressBackend(ctx context.Context, ns, name string, newBackend networkingv1beta1.IngressBackend) error {
+func (p provisioner) updateIngressBackend(ctx context.Context, ns, name string, newBackend networkingv1.IngressBackend) error {
 	ing, err := p.kuberepo.GetIngress(ctx, ns, name)
 	if err != nil {
 		return err
@@ -359,8 +363,8 @@ func (p provisioner) updateIngressBackend(ctx context.Context, ns, name string, 
 
 	// Do we need to update the ingress?
 	currentBackend := ing.Spec.Rules[0].HTTP.Paths[0].Backend
-	if currentBackend == newBackend {
-		p.logger.Debugf("ingress already pointing to %s:%v service, ignoring update", newBackend.ServiceName)
+	if currentBackend.String() == newBackend.String() {
+		p.logger.Debugf("ingress already pointing to %s:%v service, ignoring update", newBackend.Service.Name)
 		return nil
 	}
 

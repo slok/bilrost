@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spotahome/kooper/v2/controller"
-	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -23,8 +23,8 @@ const (
 // HandlerKubernetesRepository is the service to manage k8s resources by the Kubernetes handler.
 type HandlerKubernetesRepository interface {
 	GetIngressAuth(ctx context.Context, ns, name string) (*authv1.IngressAuth, error)
-	GetIngress(ctx context.Context, ns, name string) (*networkingv1beta1.Ingress, error)
-	UpdateIngress(ctx context.Context, ingress *networkingv1beta1.Ingress) error
+	GetIngress(ctx context.Context, ns, name string) (*networkingv1.Ingress, error)
+	UpdateIngress(ctx context.Context, ingress *networkingv1.Ingress) error
 }
 
 //go:generate mockery -case underscore -output controllermock -outpkg controllermock -name HandlerKubernetesRepository
@@ -94,7 +94,7 @@ func NewHandler(cfg HandlerConfig) (controller.Handler, error) {
 // TODO(slok): Not optimized in k8s resource calls, some calls are not required, check this when we have problems with it.
 func (h handler) Handle(ctx context.Context, obj runtime.Object) error {
 	switch v := obj.(type) {
-	case *networkingv1beta1.Ingress:
+	case *networkingv1.Ingress:
 		h.logger.Debugf("ingress event received...")
 		return h.handle(ctx, v, nil)
 	case *authv1.IngressAuth:
@@ -112,7 +112,7 @@ func (h handler) Handle(ctx context.Context, obj runtime.Object) error {
 	return nil
 }
 
-func (h handler) handle(ctx context.Context, ing *networkingv1beta1.Ingress, ia *authv1.IngressAuth) error {
+func (h handler) handle(ctx context.Context, ing *networkingv1.Ingress, ia *authv1.IngressAuth) error {
 	logger := h.logger.WithKV(log.KV{"obj-ns": ing.Namespace, "obj-id": ing.Name})
 
 	// Get the possible states of an ingress.
@@ -271,7 +271,7 @@ func (h handler) ensureIngressClean(ctx context.Context, ns, name string) error 
 	return nil
 }
 
-func validateIngress(ing *networkingv1beta1.Ingress) error {
+func validateIngress(ing *networkingv1.Ingress) error {
 	rulesLen := len(ing.Spec.Rules)
 	if rulesLen != 1 {
 		return fmt.Errorf("required rules on ingress is 1, got %d", rulesLen)

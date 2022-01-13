@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -213,24 +213,26 @@ func getBaseSecret() *corev1.Secret {
 	}
 }
 
-func getBaseIngress() *networkingv1beta1.Ingress {
-	return &networkingv1beta1.Ingress{
+func getBaseIngress() *networkingv1.Ingress {
+	return &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        "my-app",
 			Namespace:   "my-ns",
 			Labels:      map[string]string{"test": "1"},
 			Annotations: map[string]string{"test": "1"},
 		},
-		Spec: networkingv1beta1.IngressSpec{
-			Rules: []networkingv1beta1.IngressRule{
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{
 				{
-					IngressRuleValue: networkingv1beta1.IngressRuleValue{
-						HTTP: &networkingv1beta1.HTTPIngressRuleValue{
-							Paths: []networkingv1beta1.HTTPIngressPath{
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
 								{
-									Backend: networkingv1beta1.IngressBackend{
-										ServiceName: "my-app",
-										ServicePort: intstr.FromInt(8080),
+									Backend: networkingv1.IngressBackend{
+										Service: &networkingv1.IngressServiceBackend{
+											Name: "my-app",
+											Port: networkingv1.ServiceBackendPort{Number: 8080},
+										},
 									},
 								},
 							},
@@ -263,9 +265,11 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 				m.On("GetIngress", mock.Anything, "my-ns", "my-app").Once().Return(storedIngress, nil)
 
 				expIngress := getBaseIngress()
-				expIngress.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1beta1.IngressBackend{
-					ServiceName: "my-app-bilrost-proxy",
-					ServicePort: intstr.FromString("http"),
+				expIngress.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1.IngressBackend{
+					Service: &networkingv1.IngressServiceBackend{
+						Name: "my-app-bilrost-proxy",
+						Port: networkingv1.ServiceBackendPort{Name: "http"},
+					},
 				}
 				m.On("UpdateIngress", mock.Anything, expIngress).Once().Return(nil)
 			},
@@ -286,9 +290,11 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 				m.On("GetIngress", mock.Anything, "my-ns", "my-app").Once().Return(storedIngress, nil)
 
 				expIngress := getBaseIngress()
-				expIngress.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1beta1.IngressBackend{
-					ServiceName: "my-app-bilrost-proxy",
-					ServicePort: intstr.FromString("http"),
+				expIngress.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1.IngressBackend{
+					Service: &networkingv1.IngressServiceBackend{
+						Name: "my-app-bilrost-proxy",
+						Port: networkingv1.ServiceBackendPort{Name: "http"},
+					},
 				}
 				m.On("UpdateIngress", mock.Anything, expIngress).Once().Return(nil)
 			},
@@ -306,9 +312,11 @@ func TestOIDCProvisionerProvision(t *testing.T) {
 				m.On("EnsureService", mock.Anything, expSvc).Once().Return(nil)
 
 				storedIngress := getBaseIngress()
-				storedIngress.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1beta1.IngressBackend{
-					ServiceName: "my-app-bilrost-proxy",
-					ServicePort: intstr.FromString("http"),
+				storedIngress.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1.IngressBackend{
+					Service: &networkingv1.IngressServiceBackend{
+						Name: "my-app-bilrost-proxy",
+						Port: networkingv1.ServiceBackendPort{Name: "http"},
+					},
 				}
 				m.On("GetIngress", mock.Anything, "my-ns", "my-app").Once().Return(storedIngress, nil)
 			},
@@ -406,9 +414,11 @@ func TestOIDCProvisionerUnprovision(t *testing.T) {
 				m.On("GetIngress", context.TODO(), "test-ns", "test").Once().Return(storedIng, nil)
 
 				expIngress := storedIng.DeepCopy()
-				expIngress.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1beta1.IngressBackend{
-					ServiceName: "test-orig-svc",
-					ServicePort: intstr.FromString("http-orig"),
+				expIngress.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1.IngressBackend{
+					Service: &networkingv1.IngressServiceBackend{
+						Name: "test-orig-svc",
+						Port: networkingv1.ServiceBackendPort{Name: "http-orig"},
+					},
 				}
 				m.On("UpdateIngress", context.TODO(), expIngress).Once().Return(nil)
 				m.On("DeleteService", context.TODO(), "test-ns", "test-bilrost-proxy").Once().Return(nil)
@@ -421,9 +431,11 @@ func TestOIDCProvisionerUnprovision(t *testing.T) {
 			settings: getBaseUnprovisionSettings,
 			mock: func(m *oauth2proxymock.KubernetesRepository) {
 				storedIng := getBaseIngress()
-				storedIng.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1beta1.IngressBackend{
-					ServiceName: "test-orig-svc",
-					ServicePort: intstr.FromString("http-orig"),
+				storedIng.Spec.Rules[0].HTTP.Paths[0].Backend = networkingv1.IngressBackend{
+					Service: &networkingv1.IngressServiceBackend{
+						Name: "test-orig-svc",
+						Port: networkingv1.ServiceBackendPort{Name: "http-orig"},
+					},
 				}
 				m.On("GetIngress", context.TODO(), "test-ns", "test").Once().Return(storedIng, nil)
 				m.On("DeleteService", context.TODO(), "test-ns", "test-bilrost-proxy").Once().Return(nil)

@@ -10,11 +10,10 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/slok/bilrost/internal/controller"
 	"github.com/slok/bilrost/internal/controller/controllermock"
@@ -23,24 +22,28 @@ import (
 	authv1 "github.com/slok/bilrost/pkg/apis/auth/v1"
 )
 
-func getBaseIngress() *networkingv1beta1.Ingress {
-	return &networkingv1beta1.Ingress{
+func getBaseIngress() *networkingv1.Ingress {
+	return &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "test-ns",
 			Labels:    map[string]string{"in-test": "true"},
 		},
-		Spec: networkingv1beta1.IngressSpec{
-			Rules: []networkingv1beta1.IngressRule{
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{
 				{
 					Host: "https://bilrost-controller-test.slok.dev",
-					IngressRuleValue: networkingv1beta1.IngressRuleValue{
-						HTTP: &networkingv1beta1.HTTPIngressRuleValue{
-							Paths: []networkingv1beta1.HTTPIngressPath{
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
 								{
-									Backend: networkingv1beta1.IngressBackend{
-										ServiceName: "my-app",
-										ServicePort: intstr.FromString("http"),
+									Backend: networkingv1.IngressBackend{
+										Service: &networkingv1.IngressServiceBackend{
+											Name: "my-app",
+											Port: networkingv1.ServiceBackendPort{
+												Name: "http",
+											},
+										},
 									},
 								},
 							},
@@ -196,7 +199,7 @@ func TestHandler(t *testing.T) {
 				ing.Annotations = map[string]string{
 					"auth.bilrost.slok.dev/backend": "test-backend-id",
 				}
-				ing.Spec.Rules = append(ing.Spec.Rules, networkingv1beta1.IngressRule{})
+				ing.Spec.Rules = append(ing.Spec.Rules, networkingv1.IngressRule{})
 				return ing
 			},
 			mock:   func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {},
@@ -209,7 +212,7 @@ func TestHandler(t *testing.T) {
 				ing.Annotations = map[string]string{
 					"auth.bilrost.slok.dev/backend": "test-backend-id",
 				}
-				ing.Spec.Rules[0].HTTP.Paths = append(ing.Spec.Rules[0].HTTP.Paths, networkingv1beta1.HTTPIngressPath{})
+				ing.Spec.Rules[0].HTTP.Paths = append(ing.Spec.Rules[0].HTTP.Paths, networkingv1.HTTPIngressPath{})
 				return ing
 			},
 			mock:   func(mkr *controllermock.HandlerKubernetesRepository, ms *securitymock.Service) {},

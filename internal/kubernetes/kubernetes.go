@@ -7,7 +7,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -240,10 +240,10 @@ func (s Service) DeleteSecret(ctx context.Context, ns, name string) error {
 }
 
 // GetIngress satisfies oauth2proxy.KubernetesRepository interface.
-func (s Service) GetIngress(ctx context.Context, ns, name string) (*networkingv1beta1.Ingress, error) {
+func (s Service) GetIngress(ctx context.Context, ns, name string) (*networkingv1.Ingress, error) {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
 
-	ing, err := s.coreCli.NetworkingV1beta1().Ingresses(ns).Get(ctx, name, metav1.GetOptions{})
+	ing, err := s.coreCli.NetworkingV1().Ingresses(ns).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -254,10 +254,10 @@ func (s Service) GetIngress(ctx context.Context, ns, name string) (*networkingv1
 }
 
 // UpdateIngress satisfies oauth2proxy.KubernetesRepository interface.
-func (s Service) UpdateIngress(ctx context.Context, ingress *networkingv1beta1.Ingress) error {
+func (s Service) UpdateIngress(ctx context.Context, ingress *networkingv1.Ingress) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ingress.Namespace, "obj-name": ingress.Name})
 
-	_, err := s.coreCli.NetworkingV1beta1().Ingresses(ingress.Namespace).Update(ctx, ingress, metav1.UpdateOptions{})
+	_, err := s.coreCli.NetworkingV1().Ingresses(ingress.Namespace).Update(ctx, ingress, metav1.UpdateOptions{})
 	if err != nil {
 		return err
 	}
@@ -268,15 +268,15 @@ func (s Service) UpdateIngress(ctx context.Context, ingress *networkingv1beta1.I
 }
 
 // ListIngresses satisfies controller.IngressControllerKubeService interface.
-func (s Service) ListIngresses(ctx context.Context, ns string, labelSelector map[string]string) (*networkingv1beta1.IngressList, error) {
-	return s.coreCli.NetworkingV1beta1().Ingresses(ns).List(ctx, metav1.ListOptions{
+func (s Service) ListIngresses(ctx context.Context, ns string, labelSelector map[string]string) (*networkingv1.IngressList, error) {
+	return s.coreCli.NetworkingV1().Ingresses(ns).List(ctx, metav1.ListOptions{
 		LabelSelector: labels.Set(labelSelector).String(),
 	})
 }
 
 // WatchIngresses satisfies controller.IngressControllerKubeService interface.
 func (s Service) WatchIngresses(ctx context.Context, ns string, labelSelector map[string]string) (watch.Interface, error) {
-	return s.coreCli.NetworkingV1beta1().Ingresses(ns).Watch(ctx, metav1.ListOptions{
+	return s.coreCli.NetworkingV1().Ingresses(ns).Watch(ctx, metav1.ListOptions{
 		LabelSelector: labels.Set(labelSelector).String(),
 	})
 }
