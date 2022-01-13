@@ -5,7 +5,7 @@ package dexmock
 import (
 	context "context"
 
-	api "github.com/dexidp/dex/api"
+	api "github.com/dexidp/dex/api/v2"
 
 	grpc "google.golang.org/grpc"
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	dexapi "github.com/dexidp/dex/api"
+	dexapi "github.com/dexidp/dex/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"

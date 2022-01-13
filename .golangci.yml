@@ -1,5 +1,14 @@
 ---
-
 run:
-  skip-dirs:
-    - pkg/kubernetes/gen
+  timeout: 3m
+  build-tags:
+    - integration
+
+linters:
+  enable:
+    - misspell
+    - goimports
+    - revive
+    - gofmt
+    - depguard
+    - godot

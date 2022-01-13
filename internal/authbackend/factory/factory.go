@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"sync"
 
-	dexapi "github.com/dexidp/dex/api"
+	dexapi "github.com/dexidp/dex/api/v2"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/slok/bilrost/internal/authbackend"
 	"github.com/slok/bilrost/internal/authbackend/dex"
@@ -61,7 +62,7 @@ func (f *factory) GetAppRegisterer(ab model.AuthBackend) (authbackend.AppRegiste
 }
 
 func (f *factory) newDexAppRegisterer(ab model.AuthBackend) (authbackend.AppRegisterer, error) {
-	conn, err := grpc.Dial(ab.Dex.APIURL, grpc.WithInsecure())
+	conn, err := grpc.Dial(ab.Dex.APIURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("could not create GRPC Dex API client: %w", err)
 	}

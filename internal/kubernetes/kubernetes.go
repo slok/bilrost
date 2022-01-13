@@ -32,7 +32,7 @@ type Service struct {
 	logger     log.Logger
 }
 
-// NewService returns a new repository
+// NewService returns a new repository.
 func NewService(coreCli kubernetes.Interface, bilrostCli kubernetesbilrost.Interface, logger log.Logger) Service {
 	return Service{
 		bilrostCli: bilrostCli,
@@ -42,10 +42,10 @@ func NewService(coreCli kubernetes.Interface, bilrostCli kubernetesbilrost.Inter
 }
 
 // GetAuthBackend satisifies controller.AuthBackendRepository interface.
-func (s Service) GetAuthBackend(_ context.Context, id string) (*model.AuthBackend, error) {
+func (s Service) GetAuthBackend(ctx context.Context, id string) (*model.AuthBackend, error) {
 	logger := s.logger.WithKV(log.KV{"id": id})
 
-	ab, err := s.bilrostCli.AuthV1().AuthBackends().Get(id, metav1.GetOptions{})
+	ab, err := s.bilrostCli.AuthV1().AuthBackends().Get(ctx, id, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -70,11 +70,11 @@ func mapAuthBackendK8sToModel(ab *authv1.AuthBackend) *model.AuthBackend {
 	return res
 }
 
-// GetIngressAuth satisifes multiple interfaces.
-func (s Service) GetIngressAuth(_ context.Context, namespace, name string) (*authv1.IngressAuth, error) {
+// GetIngressAuth satisfies multiple interfaces.
+func (s Service) GetIngressAuth(ctx context.Context, namespace, name string) (*authv1.IngressAuth, error) {
 	logger := s.logger.WithKV(log.KV{"obj-ns": namespace, "obj-name": name})
 
-	ia, err := s.bilrostCli.AuthV1().IngressAuths(namespace).Get(name, metav1.GetOptions{})
+	ia, err := s.bilrostCli.AuthV1().IngressAuths(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -84,30 +84,30 @@ func (s Service) GetIngressAuth(_ context.Context, namespace, name string) (*aut
 	return ia, nil
 }
 
-// ListIngressAuths satisifes multiple interfaces.
+// ListIngressAuths satisfies multiple interfaces.
 func (s Service) ListIngressAuths(ctx context.Context, ns string, labelSelector map[string]string) (*authv1.IngressAuthList, error) {
-	return s.bilrostCli.AuthV1().IngressAuths(ns).List(metav1.ListOptions{
+	return s.bilrostCli.AuthV1().IngressAuths(ns).List(ctx, metav1.ListOptions{
 		LabelSelector: labels.Set(labelSelector).String(),
 	})
 }
 
-// WatchIngressAuths satisifes multiple interfaces.
+// WatchIngressAuths satisfies multiple interfaces.
 func (s Service) WatchIngressAuths(ctx context.Context, ns string, labelSelector map[string]string) (watch.Interface, error) {
-	return s.bilrostCli.AuthV1().IngressAuths(ns).Watch(metav1.ListOptions{
+	return s.bilrostCli.AuthV1().IngressAuths(ns).Watch(ctx, metav1.ListOptions{
 		LabelSelector: labels.Set(labelSelector).String(),
 	})
 }
 
-// EnsureDeployment satisifes oauth2proxy.KubernetesRepository interface.
-func (s Service) EnsureDeployment(_ context.Context, dep *appsv1.Deployment) error {
+// EnsureDeployment satisfies oauth2proxy.KubernetesRepository interface.
+func (s Service) EnsureDeployment(ctx context.Context, dep *appsv1.Deployment) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": dep.Namespace, "obj-name": dep.Name})
 
-	storedDep, err := s.coreCli.AppsV1().Deployments(dep.Namespace).Get(dep.Name, metav1.GetOptions{})
+	storedDep, err := s.coreCli.AppsV1().Deployments(dep.Namespace).Get(ctx, dep.Name, metav1.GetOptions{})
 	if err != nil {
 		if !kubeerrors.IsNotFound(err) {
 			return err
 		}
-		_, err = s.coreCli.AppsV1().Deployments(dep.Namespace).Create(dep)
+		_, err = s.coreCli.AppsV1().Deployments(dep.Namespace).Create(ctx, dep, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
@@ -118,7 +118,7 @@ func (s Service) EnsureDeployment(_ context.Context, dep *appsv1.Deployment) err
 
 	// Force overwrite.
 	dep.ObjectMeta.ResourceVersion = storedDep.ResourceVersion
-	_, err = s.coreCli.AppsV1().Deployments(dep.Namespace).Update(dep)
+	_, err = s.coreCli.AppsV1().Deployments(dep.Namespace).Update(ctx, dep, metav1.UpdateOptions{})
 	if err != nil {
 		return err
 	}
@@ -128,10 +128,10 @@ func (s Service) EnsureDeployment(_ context.Context, dep *appsv1.Deployment) err
 }
 
 // DeleteDeployment satisfies oauth2proxy.KubernetesRepository interface.
-func (s Service) DeleteDeployment(_ context.Context, ns, name string) error {
+func (s Service) DeleteDeployment(ctx context.Context, ns, name string) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
 
-	err := s.coreCli.AppsV1().Deployments(ns).Delete(name, &metav1.DeleteOptions{})
+	err := s.coreCli.AppsV1().Deployments(ns).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return err
 	}
@@ -140,16 +140,16 @@ func (s Service) DeleteDeployment(_ context.Context, ns, name string) error {
 	return nil
 }
 
-// EnsureService satisifes oauth2proxy.KubernetesRepository interface.
-func (s Service) EnsureService(_ context.Context, svc *corev1.Service) error {
+// EnsureService satisfies oauth2proxy.KubernetesRepository interface.
+func (s Service) EnsureService(ctx context.Context, svc *corev1.Service) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": svc.Namespace, "obj-name": svc.Name})
 
-	storedSvc, err := s.coreCli.CoreV1().Services(svc.Namespace).Get(svc.Name, metav1.GetOptions{})
+	storedSvc, err := s.coreCli.CoreV1().Services(svc.Namespace).Get(ctx, svc.Name, metav1.GetOptions{})
 	if err != nil {
 		if !kubeerrors.IsNotFound(err) {
 			return err
 		}
-		_, err = s.coreCli.CoreV1().Services(svc.Namespace).Create(svc)
+		_, err = s.coreCli.CoreV1().Services(svc.Namespace).Create(ctx, svc, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
@@ -161,7 +161,7 @@ func (s Service) EnsureService(_ context.Context, svc *corev1.Service) error {
 	// Force overwrite.
 	svc.ObjectMeta.ResourceVersion = storedSvc.ResourceVersion
 	svc.Spec.ClusterIP = storedSvc.Spec.ClusterIP
-	_, err = s.coreCli.CoreV1().Services(svc.Namespace).Update(svc)
+	_, err = s.coreCli.CoreV1().Services(svc.Namespace).Update(ctx, svc, metav1.UpdateOptions{})
 	if err != nil {
 		return err
 	}
@@ -171,10 +171,10 @@ func (s Service) EnsureService(_ context.Context, svc *corev1.Service) error {
 }
 
 // DeleteService satisfies oauth2proxy.KubernetesRepository interface.
-func (s Service) DeleteService(_ context.Context, ns, name string) error {
+func (s Service) DeleteService(ctx context.Context, ns, name string) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
 
-	err := s.coreCli.CoreV1().Services(ns).Delete(name, &metav1.DeleteOptions{})
+	err := s.coreCli.CoreV1().Services(ns).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return err
 	}
@@ -184,10 +184,10 @@ func (s Service) DeleteService(_ context.Context, ns, name string) error {
 }
 
 // GetSecret satisfies dex.KubernetesRepository interface.
-func (s Service) GetSecret(_ context.Context, ns, name string) (*corev1.Secret, error) {
+func (s Service) GetSecret(ctx context.Context, ns, name string) (*corev1.Secret, error) {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
 
-	secret, err := s.coreCli.CoreV1().Secrets(ns).Get(name, metav1.GetOptions{})
+	secret, err := s.coreCli.CoreV1().Secrets(ns).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -197,16 +197,16 @@ func (s Service) GetSecret(_ context.Context, ns, name string) (*corev1.Secret, 
 	return secret, nil
 }
 
-// EnsureSecret satisifes oauth2proxy.KubernetesRepository interface.
-func (s Service) EnsureSecret(_ context.Context, secret *corev1.Secret) error {
+// EnsureSecret satisfies oauth2proxy.KubernetesRepository interface.
+func (s Service) EnsureSecret(ctx context.Context, secret *corev1.Secret) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": secret.Namespace, "obj-name": secret.Name})
 
-	storedSecret, err := s.coreCli.CoreV1().Secrets(secret.Namespace).Get(secret.Name, metav1.GetOptions{})
+	storedSecret, err := s.coreCli.CoreV1().Secrets(secret.Namespace).Get(ctx, secret.Name, metav1.GetOptions{})
 	if err != nil {
 		if !kubeerrors.IsNotFound(err) {
 			return err
 		}
-		_, err = s.coreCli.CoreV1().Secrets(secret.Namespace).Create(secret)
+		_, err = s.coreCli.CoreV1().Secrets(secret.Namespace).Create(ctx, secret, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
@@ -217,7 +217,7 @@ func (s Service) EnsureSecret(_ context.Context, secret *corev1.Secret) error {
 
 	// Force overwrite.
 	secret.ObjectMeta.ResourceVersion = storedSecret.ResourceVersion
-	_, err = s.coreCli.CoreV1().Secrets(secret.Namespace).Update(secret)
+	_, err = s.coreCli.CoreV1().Secrets(secret.Namespace).Update(ctx, secret, metav1.UpdateOptions{})
 	if err != nil {
 		return err
 	}
@@ -227,10 +227,10 @@ func (s Service) EnsureSecret(_ context.Context, secret *corev1.Secret) error {
 }
 
 // DeleteSecret satisfies oauth2proxy.KubernetesRepository interface.
-func (s Service) DeleteSecret(_ context.Context, ns, name string) error {
+func (s Service) DeleteSecret(ctx context.Context, ns, name string) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
 
-	err := s.coreCli.CoreV1().Secrets(ns).Delete(name, &metav1.DeleteOptions{})
+	err := s.coreCli.CoreV1().Secrets(ns).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return err
 	}
@@ -240,10 +240,10 @@ func (s Service) DeleteSecret(_ context.Context, ns, name string) error {
 }
 
 // GetIngress satisfies oauth2proxy.KubernetesRepository interface.
-func (s Service) GetIngress(_ context.Context, ns, name string) (*networkingv1beta1.Ingress, error) {
+func (s Service) GetIngress(ctx context.Context, ns, name string) (*networkingv1beta1.Ingress, error) {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ns, "obj-name": name})
 
-	ing, err := s.coreCli.NetworkingV1beta1().Ingresses(ns).Get(name, metav1.GetOptions{})
+	ing, err := s.coreCli.NetworkingV1beta1().Ingresses(ns).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -254,10 +254,10 @@ func (s Service) GetIngress(_ context.Context, ns, name string) (*networkingv1be
 }
 
 // UpdateIngress satisfies oauth2proxy.KubernetesRepository interface.
-func (s Service) UpdateIngress(_ context.Context, ingress *networkingv1beta1.Ingress) error {
+func (s Service) UpdateIngress(ctx context.Context, ingress *networkingv1beta1.Ingress) error {
 	logger := s.logger.WithKV(log.KV{"obj-ns": ingress.Namespace, "obj-name": ingress.Name})
 
-	_, err := s.coreCli.NetworkingV1beta1().Ingresses(ingress.Namespace).Update(ingress)
+	_, err := s.coreCli.NetworkingV1beta1().Ingresses(ingress.Namespace).Update(ctx, ingress, metav1.UpdateOptions{})
 	if err != nil {
 		return err
 	}
@@ -268,21 +268,21 @@ func (s Service) UpdateIngress(_ context.Context, ingress *networkingv1beta1.Ing
 }
 
 // ListIngresses satisfies controller.IngressControllerKubeService interface.
-func (s Service) ListIngresses(_ context.Context, ns string, labelSelector map[string]string) (*networkingv1beta1.IngressList, error) {
-	return s.coreCli.NetworkingV1beta1().Ingresses(ns).List(metav1.ListOptions{
+func (s Service) ListIngresses(ctx context.Context, ns string, labelSelector map[string]string) (*networkingv1beta1.IngressList, error) {
+	return s.coreCli.NetworkingV1beta1().Ingresses(ns).List(ctx, metav1.ListOptions{
 		LabelSelector: labels.Set(labelSelector).String(),
 	})
 }
 
 // WatchIngresses satisfies controller.IngressControllerKubeService interface.
-func (s Service) WatchIngresses(_ context.Context, ns string, labelSelector map[string]string) (watch.Interface, error) {
-	return s.coreCli.NetworkingV1beta1().Ingresses(ns).Watch(metav1.ListOptions{
+func (s Service) WatchIngresses(ctx context.Context, ns string, labelSelector map[string]string) (watch.Interface, error) {
+	return s.coreCli.NetworkingV1beta1().Ingresses(ns).Watch(ctx, metav1.ListOptions{
 		LabelSelector: labels.Set(labelSelector).String(),
 	})
 }
 
 // GetServiceHostAndPort satisifies security.KubeServiceTranslator interface.
-func (s Service) GetServiceHostAndPort(_ context.Context, svc model.KubernetesService) (string, int, error) {
+func (s Service) GetServiceHostAndPort(ctx context.Context, svc model.KubernetesService) (string, int, error) {
 	host := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
 	port, err := strconv.Atoi(svc.PortOrPortName)
 	if err == nil {
@@ -291,7 +291,7 @@ func (s Service) GetServiceHostAndPort(_ context.Context, svc model.KubernetesSe
 
 	// Our port is based on a name.
 	// TODO(slok): Should we optimize with DNS SRV resolution although is worse for development? make it optional?.
-	service, err := s.coreCli.CoreV1().Services(svc.Namespace).Get(svc.Name, metav1.GetOptions{})
+	service, err := s.coreCli.CoreV1().Services(svc.Namespace).Get(ctx, svc.Name, metav1.GetOptions{})
 	if err != nil {
 		return "", 0, err
 	}
