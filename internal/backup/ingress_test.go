@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/slok/bilrost/internal/backup"
@@ -36,7 +36,7 @@ func TestIngressBackupperBackupOrGet(t *testing.T) {
 				ServicePortOrNamePort: "http",
 			},
 			mock: func(m *backupmock.KubernetesRepository) {
-				ing := &networkingv1beta1.Ingress{
+				ing := &networkingv1.Ingress{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-ing",
 						Annotations: map[string]string{
@@ -69,7 +69,7 @@ func TestIngressBackupperBackupOrGet(t *testing.T) {
 				ServicePortOrNamePort: "http",
 			},
 			mock: func(m *backupmock.KubernetesRepository) {
-				ing := &networkingv1beta1.Ingress{
+				ing := &networkingv1.Ingress{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-ing",
 						Annotations: map[string]string{
@@ -123,7 +123,7 @@ func TestIngressBackupperGetBackup(t *testing.T) {
 				},
 			},
 			mock: func(m *backupmock.KubernetesRepository) {
-				ing := &networkingv1beta1.Ingress{
+				ing := &networkingv1.Ingress{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-ing",
 						Annotations: map[string]string{
@@ -143,7 +143,7 @@ func TestIngressBackupperGetBackup(t *testing.T) {
 				},
 			},
 			mock: func(m *backupmock.KubernetesRepository) {
-				ing := &networkingv1beta1.Ingress{
+				ing := &networkingv1.Ingress{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-ing",
 						Annotations: map[string]string{
@@ -196,7 +196,7 @@ func TestIngressBackupperDeleteBackup(t *testing.T) {
 				},
 			},
 			mock: func(m *backupmock.KubernetesRepository) {
-				ing := &networkingv1beta1.Ingress{
+				ing := &networkingv1.Ingress{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-ing",
 						Annotations: map[string]string{
@@ -221,7 +221,7 @@ func TestIngressBackupperDeleteBackup(t *testing.T) {
 				},
 			},
 			mock: func(m *backupmock.KubernetesRepository) {
-				ing := &networkingv1beta1.Ingress{
+				ing := &networkingv1.Ingress{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-ing",
 						Annotations: map[string]string{

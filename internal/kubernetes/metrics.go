@@ -6,7 +6,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/watch"
 
 	"github.com/slok/bilrost/internal/metrics"
@@ -115,7 +115,7 @@ func (m MeasuredService) DeleteSecret(ctx context.Context, ns, name string) (err
 }
 
 // GetIngress satisfies oauth2proxy.KubernetesRepository interface.
-func (m MeasuredService) GetIngress(ctx context.Context, ns, name string) (i *networkingv1beta1.Ingress, err error) {
+func (m MeasuredService) GetIngress(ctx context.Context, ns, name string) (i *networkingv1.Ingress, err error) {
 	defer func(t0 time.Time) {
 		m.rec.ObserveKubernetesServiceOperation(ctx, ns, "GetIngress", err == nil, t0)
 	}(time.Now())
@@ -123,7 +123,7 @@ func (m MeasuredService) GetIngress(ctx context.Context, ns, name string) (i *ne
 }
 
 // UpdateIngress satisfies oauth2proxy.KubernetesRepository interface.
-func (m MeasuredService) UpdateIngress(ctx context.Context, ingress *networkingv1beta1.Ingress) (err error) {
+func (m MeasuredService) UpdateIngress(ctx context.Context, ingress *networkingv1.Ingress) (err error) {
 	defer func(t0 time.Time) {
 		m.rec.ObserveKubernetesServiceOperation(ctx, ingress.Namespace, "UpdateIngress", err == nil, t0)
 	}(time.Now())
@@ -131,7 +131,7 @@ func (m MeasuredService) UpdateIngress(ctx context.Context, ingress *networkingv
 }
 
 // ListIngresses satisfies controller.IngressControllerKubeService interface.
-func (m MeasuredService) ListIngresses(ctx context.Context, ns string, labelSelector map[string]string) (i *networkingv1beta1.IngressList, err error) {
+func (m MeasuredService) ListIngresses(ctx context.Context, ns string, labelSelector map[string]string) (i *networkingv1.IngressList, err error) {
 	defer func(t0 time.Time) {
 		m.rec.ObserveKubernetesServiceOperation(ctx, ns, "ListIngresses", err == nil, t0)
 	}(time.Now())

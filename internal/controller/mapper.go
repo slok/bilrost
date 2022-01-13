@@ -2,15 +2,16 @@ package controller
 
 import (
 	"fmt"
+	"strconv"
 
-	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 
 	"github.com/slok/bilrost/internal/model"
 	authv1 "github.com/slok/bilrost/pkg/apis/auth/v1"
 )
 
 // maps an ingress and a ingress auth to a model, is safe to pass ingress auth `nil`.
-func mapToModel(ing *networkingv1beta1.Ingress, ia *authv1.IngressAuth) model.App {
+func mapToModel(ing *networkingv1.Ingress, ia *authv1.IngressAuth) model.App {
 	app := mapIngressToModel(ing)
 	app.ProxySettings = mapIngressAuthToModel(ia)
 
@@ -18,7 +19,12 @@ func mapToModel(ing *networkingv1beta1.Ingress, ia *authv1.IngressAuth) model.Ap
 }
 
 // mapIngressToModel maps the base data of the app, this data is obtained from the ingress.
-func mapIngressToModel(ing *networkingv1beta1.Ingress) model.App {
+func mapIngressToModel(ing *networkingv1.Ingress) model.App {
+	portOrPortName := ing.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Port.Name
+	if portOrPortName == "" {
+		portOrPortName = strconv.Itoa(int(ing.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Port.Number))
+	}
+
 	return model.App{
 		ID:            fmt.Sprintf("%s/%s", ing.Namespace, ing.Name),
 		AuthBackendID: ing.Annotations[backendAnnotation],
@@ -27,9 +33,9 @@ func mapIngressToModel(ing *networkingv1beta1.Ingress) model.App {
 			Name:      ing.Name,
 			Namespace: ing.Namespace,
 			Upstream: model.KubernetesService{
-				Name:           ing.Spec.Rules[0].HTTP.Paths[0].Backend.ServiceName,
+				Name:           ing.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name,
 				Namespace:      ing.Namespace,
-				PortOrPortName: ing.Spec.Rules[0].HTTP.Paths[0].Backend.ServicePort.String(),
+				PortOrPortName: portOrPortName,
 			},
 		},
 	}

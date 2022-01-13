@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/spotahome/kooper/v2/controller"
-	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -15,7 +15,7 @@ import (
 
 // RetrieverKubernetesRepository is the service to manage k8s resources by the Kubernetes retrievers.
 type RetrieverKubernetesRepository interface {
-	ListIngresses(ctx context.Context, ns string, labelSelector map[string]string) (*networkingv1beta1.IngressList, error)
+	ListIngresses(ctx context.Context, ns string, labelSelector map[string]string) (*networkingv1.IngressList, error)
 	WatchIngresses(ctx context.Context, ns string, labelSelector map[string]string) (watch.Interface, error)
 	ListIngressAuths(ctx context.Context, ns string, labelSelector map[string]string) (*authv1.IngressAuthList, error)
 	WatchIngressAuths(ctx context.Context, ns string, labelSelector map[string]string) (watch.Interface, error)

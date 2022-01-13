@@ -7,9 +7,9 @@ import (
 
 	mock "github.com/stretchr/testify/mock"
 
-	v1 "github.com/slok/bilrost/pkg/apis/auth/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 
-	v1beta1 "k8s.io/api/networking/v1beta1"
+	v1 "github.com/slok/bilrost/pkg/apis/auth/v1"
 
 	watch "k8s.io/apimachinery/pkg/watch"
 )
@@ -43,15 +43,15 @@ func (_m *RetrieverKubernetesRepository) ListIngressAuths(ctx context.Context, n
 }
 
 // ListIngresses provides a mock function with given fields: ctx, ns, labelSelector
-func (_m *RetrieverKubernetesRepository) ListIngresses(ctx context.Context, ns string, labelSelector map[string]string) (*v1beta1.IngressList, error) {
+func (_m *RetrieverKubernetesRepository) ListIngresses(ctx context.Context, ns string, labelSelector map[string]string) (*networkingv1.IngressList, error) {
 	ret := _m.Called(ctx, ns, labelSelector)
 
-	var r0 *v1beta1.IngressList
-	if rf, ok := ret.Get(0).(func(context.Context, string, map[string]string) *v1beta1.IngressList); ok {
+	var r0 *networkingv1.IngressList
+	if rf, ok := ret.Get(0).(func(context.Context, string, map[string]string) *networkingv1.IngressList); ok {
 		r0 = rf(ctx, ns, labelSelector)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*v1beta1.IngressList)
+			r0 = ret.Get(0).(*networkingv1.IngressList)
 		}
 	}
 
